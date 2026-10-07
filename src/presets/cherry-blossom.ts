@@ -9,6 +9,7 @@ import {
   makeGroundTexture,
   makeBlossomGeometry,
   makeFoliageBlobGeometry,
+  makeLeafGeometry,
   taperedTube,
 } from './shared';
 
@@ -148,6 +149,26 @@ export const cherryBlossomPreset: NaturalScenePreset = {
     };
 
     const trunkBase = new THREE.Vector3(rng.range(-1, 1), 0, rng.range(-1, 1));
+    // seat the trunk on a dark module near the middle: the trunk's top-down
+    // footprint then reinforces a dark module instead of punching a light one
+    {
+      const n = field.qr.size;
+      const t = field.total;
+      const qz = field.quietZone;
+      let best: { x: number; z: number; score: number } | null = null;
+      for (let r = Math.floor(n / 2) - 3; r <= Math.floor(n / 2) + 3; r++) {
+        for (let c = Math.floor(n / 2) - 3; c <= Math.floor(n / 2) + 3; c++) {
+          if (!field.qr.matrix[r]?.[c]) continue;
+          const u = (c + qz + 0.5) / t;
+          const v = (r + qz + 0.5) / t;
+          const x = (u - 0.5) * S;
+          const z = (v - 0.5) * S;
+          const score = -(x * x + z * z) + rng.next() * 4;
+          if (!best || score > best.score) best = { x, z, score };
+        }
+      }
+      if (best) trunkBase.set(best.x, 0, best.z);
+    }
     grow(trunkBase, new THREE.Vector3(rng.range(-0.08, 0.08), 1, rng.range(-0.08, 0.08)).normalize(), H * 0.7, 0.8, 0);
     // roots
     for (let i = 0; i < 6; i++) {
@@ -195,7 +216,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
       const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
       return t * t * (3 - 2 * t);
     };
-    const candidates = Math.round(canopyMax * 6 * areaK);
+    const candidates = Math.round(canopyMax * 3 * areaK);
     for (let i = 0; i < candidates && ia + ib < canopyMax; i++) {
       // uniform over the QR square with a noisy ragged rim (covers corner finders)
       const x = trunkBase.x + rng.range(-0.5, 0.5) * S * 0.98;
@@ -206,15 +227,18 @@ export const cherryBlossomPreset: NaturalScenePreset = {
       if (rim > 1 || rng.next() < smoothstep(0.86, 1.0, rim) * 0.9) continue;
       const f = at(x, z);
       // steep contrast curve: dark modules ~opaque, light modules nearly open
-      const p = (0.01 + 0.99 * smoothstep(0.38, 0.75, f) * Math.min(1, params.density + 0.15)) * (0.05 + 0.95 * qrMask(field, x, z, S));
+      const trunkD = Math.hypot(x - trunkBase.x, z - trunkBase.z);
+      if (trunkD < 1.6) continue; // trunk flare owns the center module
+      // near-binary acceptance: light modules stay genuinely open
+      const p = (0.01 + 0.99 * smoothstep(0.45, 0.6, f) * Math.min(1, params.density + 0.15)) * (0.05 + 0.95 * qrMask(field, x, z, S));
       if (rng.next() > p) continue;
       // cloud-pruned dome: higher near middle, ragged edge
       const y = H * (0.8 + 0.35 * (1 - rim * rim)) + rng.gaussian(0, 0.45 + params.variation * 0.45);
       pv.set(x + rng.gaussian(0, 0.25), Math.max(H * 0.5, y), z + rng.gaussian(0, 0.25));
       e.set(rng.range(0, Math.PI), rng.range(0, Math.PI * 2), rng.range(0, Math.PI));
       q.setFromEuler(e);
-      // small footprints: a blob must not swallow neighboring light modules
-      const s = rng.range(0.3, 0.55) * (0.7 + params.density * 0.5);
+      // small footprints: side-volume only, the anchor roof carries the top view
+      const s = rng.range(0.25, 0.45) * (0.7 + params.density * 0.5);
       sc.set(s * rng.range(0.9, 1.5), s * rng.range(0.7, 1), s * rng.range(0.9, 1.5));
       m.compose(pv, q, sc);
       // darker instances in dark modules -> stronger top-down contrast
@@ -232,6 +256,60 @@ export const cherryBlossomPreset: NaturalScenePreset = {
     canopyA.count = ia;
     canopyB.count = ib;
     group.add(canopyA, canopyB);
+
+    // ---------- anchor leaves: one dark foliage tuft per dark module ----------
+    // Micro-scale QR fidelity: jittered irregular leaves (never squares) pinned
+    // at dark-module cores so every dark module reads dark from directly above.
+    // From the side they dissolve into ordinary canopy.
+    {
+      const leafGeo = makeLeafGeometry(0.6, 0.3);
+      const leafMat = new THREE.MeshStandardMaterial({
+        color: '#16280f',
+        roughness: 1,
+        side: THREE.DoubleSide,
+      });
+      const darkMods: { x: number; z: number }[] = [];
+      const n = field.qr.size;
+      const t = field.total;
+      const qz = field.quietZone;
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+          if (!field.qr.matrix[r][c]) continue;
+          const u = (c + qz + 0.5) / t;
+          const v = (r + qz + 0.5) / t;
+          darkMods.push({ x: (u - 0.5) * S, z: (v - 0.5) * S });
+        }
+      }
+      const anchors = new THREE.InstancedMesh(leafGeo, leafMat, Math.max(1, darkMods.length * 5));
+      let ai2 = 0;
+      for (const dm of darkMods) {
+        if (qrMask(field, dm.x, dm.z, S) < 0.3) continue;
+        if (Math.hypot(dm.x - trunkBase.x, dm.z - trunkBase.z) < 1.6) continue;
+        // five overlapping leaves per dark module: a dense living roof with
+        // ragged organic edges (never solid squares)
+        for (let k = 0; k < 5 && ai2 < anchors.count; k++) {
+          const jx = dm.x + rng.gaussian(0, 0.24);
+          const jz = dm.z + rng.gaussian(0, 0.24);
+          const nx = Math.abs(jx - trunkBase.x) / (S * 0.5);
+          const nz = Math.abs(jz - trunkBase.z) / (S * 0.5);
+          const rim = Math.min(1, Math.max(nx, nz));
+          pv.set(jx, H * (0.88 + 0.35 * (1 - rim * rim)) + rng.gaussian(0, 0.3) + k * 0.12, jz);
+          // flat to the sky (top-visible): yaw around world-Y, then small tilts
+          q.setFromEuler(new THREE.Euler(0, rng.range(0, Math.PI * 2), 0));
+          const tilt = new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(-Math.PI / 2 + rng.gaussian(0, 0.3), 0, rng.gaussian(0, 0.3)),
+          );
+          q.multiply(tilt);
+          // broad overlapping leaves: adjacent dark modules merge into a living
+          // canopy roof from above, ragged and organic at the edges
+          sc.set(rng.range(1.2, 1.8), rng.range(1.3, 2.0), 1);
+          m.compose(pv, q, sc);
+          anchors.setMatrixAt(ai2++, m);
+        }
+      }
+      anchors.count = ai2;
+      group.add(anchors);
+    }
 
     // ---------- blossoms: 5-petal instanced flowers clustered on twigs ----------
     const blossomGeo = makeBlossomGeometry();
@@ -268,10 +346,10 @@ export const cherryBlossomPreset: NaturalScenePreset = {
       if (rng.next() > keep * params.flowerDensity + 0.02) continue;
       const n = rng.int(3, 7);
       for (let k = 0; k < n && bi < blossoms.count; k++) {
-        // hang blossoms just under the canopy top so the top projection stays clean
+        // hang blossoms well under the anchor roof so the top projection stays clean
         placeFlower(
           tip.pos.x + rng.gaussian(0, 0.45),
-          tip.pos.y * 0.82 + rng.gaussian(0, 0.3),
+          Math.min(tip.pos.y * 0.82, H * 0.7) + rng.gaussian(0, 0.3),
           tip.pos.z + rng.gaussian(0, 0.45),
           rng.range(0.5, 0.95),
         );
@@ -286,7 +364,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
       const z = trunkBase.z + Math.sin(a) * r;
       const f = at(x, z);
       if (rng.next() > (1 - f) * 0.5 * params.flowerDensity * (0.1 + 0.9 * qrMask(field, x, z, S))) continue;
-      placeFlower(x, H * rng.range(0.5, 0.85) + rng.gaussian(0, 0.4), z, rng.range(0.45, 0.8));
+      placeFlower(x, H * rng.range(0.45, 0.7) + rng.gaussian(0, 0.4), z, rng.range(0.45, 0.8));
     }
     blossoms.count = bi;
     blossoms.castShadow = true;

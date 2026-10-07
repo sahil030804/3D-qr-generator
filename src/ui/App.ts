@@ -352,6 +352,15 @@ export class App {
         { onAttempt: (n, note) => this.setBadge('working', `Verifying… ${note}`) },
       );
       this.current = verified;
+      // debug hook for automated inspection (scene graph + field)
+      (window as unknown as { __qrScene?: unknown }).__qrScene = {
+        group: verified.group,
+        modules: verified.field.qr.matrix,
+        size: verified.field.qr.size,
+        total: verified.field.total,
+        quietZone: verified.field.quietZone,
+        worldSize: preset.qrWorldSize * (this.params.sceneScale || 1),
+      };
       const ok = verified.result.success && verified.result.data === verified.content;
       this.setBadge(ok ? 'ok' : 'fail', ok ? `✓ QR Verified · ${verified.attempts} attempt${verified.attempts > 1 ? 's' : ''}` : '✗ Not decodable — try stronger QR strength');
       if (!ok) this.toast('Top-down decode failed after 4 attempts. Raise QR strength / density, or shorten the content.');

@@ -46,9 +46,8 @@ export async function generateVerifiedScene(
   const maxAttempts = Math.min(4, opts.maxAttempts ?? 4);
   const top = new TopDownRenderer(renderer);
   const t0 = performance.now();
-  let group: THREE.Group | null = null;
-  let lastResult: TopDownResult | null = null;
-  let lastParams: GeneratorParams = defaultParams(opts.params);
+  // retain every attempt; dispose all but the winner at the end
+  const candidates: { group: THREE.Group; field: QRField; params: GeneratorParams; result: TopDownResult }[] = [];
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const boost = attempt; // 0 = user settings, then progressively stronger
@@ -60,16 +59,12 @@ export async function generateVerifiedScene(
       variation: Math.max(0.15, (opts.params.variation ?? 0.55) - boost * 0.06),
       seed: (opts.params.seed ?? 20260707) + (attempt === 0 ? 0 : 1000 + boost),
     };
-    lastParams = params;
     const field = new QRField(qr);
     const rng = new SeededRandom(SeededRandom.hashSeed(`${params.seed}:${presetId}:${content}`));
     const worldSize = (opts.worldSizeOverride ?? preset.qrWorldSize) * (params.sceneScale || 1);
     const ctx = { field, rng, params, worldSize };
-    if (group) {
-      scene.remove(group);
-      disposeObject(group);
-    }
-    group = preset.generate(ctx);
+    for (const c of candidates) scene.remove(c.group);
+    const group = preset.generate(ctx);
     scene.add(group);
     // let the GL pipeline settle (textures upload) before readback
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -79,20 +74,34 @@ export async function generateVerifiedScene(
         : `attempt ${attempt + 1} · strength ${params.qrStrength.toFixed(2)}, density ${params.density.toFixed(2)}, seed ${params.seed}`;
     cb.onAttempt?.(attempt + 1, note);
     const result = top.render(scene, worldSize, opts.resolution ?? 512, opts.lighting, field);
-    lastResult = result;
+    candidates.push({ group, field, params, result });
     if (result.success && result.data === qr.content) {
+      for (const c of candidates) {
+        if (c.group === group) continue;
+        scene.remove(c.group);
+        disposeObject(c.group);
+      }
       return { group, field, content: qr.content, params, attempts: attempt + 1, result, generationMs: performance.now() - t0 };
     }
     // yield to UI between attempts
     await new Promise((r) => setTimeout(r, 0));
   }
+  // decode failed: hand back the highest-agreement attempt, not the last
+  candidates.sort((a, b) => b.result.agreement - a.result.agreement);
+  const winner = candidates[0];
+  for (const c of candidates.slice(1)) {
+    scene.remove(c.group);
+    disposeObject(c.group);
+  }
+  scene.remove(winner.group);
+  scene.add(winner.group);
   return {
-    group: group!,
-    field: new QRField(qr),
+    group: winner.group,
+    field: winner.field,
     content: qr.content,
-    params: lastParams,
+    params: winner.params,
     attempts: maxAttempts,
-    result: lastResult!,
+    result: winner.result,
     generationMs: performance.now() - t0,
   };
 }

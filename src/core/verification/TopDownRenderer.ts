@@ -93,8 +93,10 @@ export class TopDownRenderer {
     const variants: { w: number; img: ImageData }[] = [
       { w: resolution, img: binarize(gray, resolution, otsu(gray)) },
       { w: resolution, img: binarize(boxBlur(gray, resolution), resolution, otsu(gray)) },
+      { w: resolution, img: morphClean(binarize(gray, resolution, otsu(gray)), resolution) },
       { w: resolution, img: adaptiveBinarize(gray, resolution) },
       { w: halfRes, img: binarize(small, halfRes, otsu(small)) },
+      { w: halfRes, img: morphClean(binarize(small, halfRes, otsu(small)), halfRes) },
       { w: halfRes, img: binarize(small, halfRes, otsu(small) - 14) },
       { w: quarter, img: binarize(tiny, quarter, otsu(tiny)) },
       { w: quarter, img: adaptiveBinarize(tiny, quarter) },
@@ -161,6 +163,48 @@ function boxBlur(g: Float32Array, size: number): Float32Array {
       }
       out[y * size + x] = sum / n;
     }
+  }
+  return out;
+}
+
+/**
+ * Morphological open+close on the dark mask (3x3): erases isolated dark
+ * speckles (stray foliage in light modules) and fills pinhole light gaps
+ * (blossom dots in dark modules). Module blocks (12px+) survive intact.
+ */
+function morphClean(img: ImageData, size: number): ImageData {
+  const D = new Uint8Array(size * size);
+  for (let i = 0; i < D.length; i++) D[i] = img.data[i * 4] < 128 ? 1 : 0;
+  const at = (g: Uint8Array, x: number, y: number): number =>
+    g[Math.min(size - 1, Math.max(0, y)) * size + Math.min(size - 1, Math.max(0, x))];
+  const erode = (g: Uint8Array): Uint8Array => {
+    const o = new Uint8Array(g.length);
+    for (let y = 0; y < size; y++)
+      for (let x = 0; x < size; x++) {
+        let all = 1;
+        for (let yy = y - 1; yy <= y + 1 && all; yy++)
+          for (let xx = x - 1; xx <= x + 1 && all; xx++) if (!at(g, xx, yy)) all = 0;
+        o[y * size + x] = all;
+      }
+    return o;
+  };
+  const dilate = (g: Uint8Array): Uint8Array => {
+    const o = new Uint8Array(g.length);
+    for (let y = 0; y < size; y++)
+      for (let x = 0; x < size; x++) {
+        let any = 0;
+        for (let yy = y - 1; yy <= y + 1 && !any; yy++)
+          for (let xx = x - 1; xx <= x + 1 && !any; xx++) if (at(g, xx, yy)) any = 1;
+        o[y * size + x] = any;
+      }
+    return o;
+  };
+  const cleaned = erode(dilate(dilate(erode(D)))); // open then close
+  const out = new ImageData(size, size);
+  for (let i = 0; i < cleaned.length; i++) {
+    const v = cleaned[i] ? 0 : 255;
+    out.data[i * 4] = out.data[i * 4 + 1] = out.data[i * 4 + 2] = v;
+    out.data[i * 4 + 3] = 255;
   }
   return out;
 }
