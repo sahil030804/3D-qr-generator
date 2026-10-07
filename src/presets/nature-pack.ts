@@ -3,7 +3,7 @@ import type { SceneGenerationContext } from '../core/generation/types';
 import { QUALITY_BUDGET, constrainByQR, qualityMultiplier } from '../core/generation/types';
 import { Noise2D } from '../core/generation/NoiseSystem';
 import type { NaturalScenePreset } from './Preset';
-import { makeGroundTexture } from './shared';
+import { makeGroundTexture, qrMask } from './shared';
 
 function fieldSampler(ctx: SceneGenerationContext, S: number) {
   const { field, rng, params } = ctx;
@@ -18,7 +18,7 @@ function fieldSampler(ctx: SceneGenerationContext, S: number) {
     at: (x: number, z: number) => {
       const u = x / S + 0.5;
       const v = z / S + 0.5;
-      if (u < 0 || u > 1 || v < 0 || v > 1) return 0.4;
+      if (u < 0 || u > 1 || v < 0 || v > 1) return 0.05;
       return field.combined(u, v, [0.35, 0.3, 0.35], warpFn);
     },
   };
@@ -51,7 +51,7 @@ function groundMesh(rng: import('../core/generation/SeededRandom').SeededRandom,
 export const flowerFieldPreset: NaturalScenePreset = {
   id: 'flower-field', name: 'Flower Field', icon: '🌷', description: 'Wildflower meadow with a hidden bloom QR', qrWorldSize: 26,
   generate(ctx) {
-    const { rng, params, worldSize: S } = ctx;
+    const { field, rng, params, worldSize: S } = ctx;
     const { noise, at } = fieldSampler(ctx, S);
     const group = new THREE.Group();
     const light = new THREE.Color('#cfd6a4');
@@ -70,7 +70,7 @@ export const flowerFieldPreset: NaturalScenePreset = {
     while (n < N && guard-- > 0) {
       const x = rng.range(-S / 2, S / 2); const z = rng.range(-S / 2, S / 2);
       const f = at(x, z);
-      if (rng.next() > constrainByQR(0.4, Math.pow(f, 1.3), params.qrStrength) * params.density) continue;
+      if (rng.next() > constrainByQR(0.4, Math.pow(f, 1.3), params.qrStrength) * params.density * (0.05 + 0.95 * qrMask(field, x, z, S))) continue;
       v.set(x, 0, z); e.set(rng.range(-0.12, 0.12), rng.range(0, 6), rng.range(-0.12, 0.12)); q.setFromEuler(e);
       const g = rng.range(0.7, 1.5); s.set(g, g, g); m.compose(v, q, s);
       stems.setMatrixAt(n, m); heads.setMatrixAt(n, m);
@@ -101,7 +101,7 @@ export const flowerFieldPreset: NaturalScenePreset = {
 export const mountainPreset: NaturalScenePreset = {
   id: 'mountain', name: 'Mountain', icon: '🏔️', description: 'Alpine ridges with a hidden summit QR', qrWorldSize: 30,
   generate(ctx) {
-    const { rng, params, worldSize: S } = ctx;
+    const { field, rng, params, worldSize: S } = ctx;
     const { noise, at } = fieldSampler(ctx, S);
     const group = new THREE.Group();
     const seg = params.quality === 'preview' ? 56 : 96;
@@ -143,7 +143,7 @@ export const mountainPreset: NaturalScenePreset = {
       const h = heightAt(x, z);
       if (h > 4.6) continue;
       const f = at(x, z);
-      if (rng.next() > f * f * params.density) continue;
+      if (rng.next() > f * f * params.density * (0.05 + 0.95 * qrMask(field, x, z, S))) continue;
       v.set(x, h - 0.1, z); e.set(0, rng.range(0, 6), 0); q.setFromEuler(e);
       const sc = rng.range(0.6, 1.6); s.set(sc, sc, sc); m.compose(v, q, s);
       pines.setMatrixAt(n, m);
@@ -160,7 +160,7 @@ export const mountainPreset: NaturalScenePreset = {
 export const crystalPreset: NaturalScenePreset = {
   id: 'crystal', name: 'Crystal', icon: '💎', description: 'Amethyst field with a hidden crystal QR', qrWorldSize: 26,
   generate(ctx) {
-    const { rng, params, worldSize: S } = ctx;
+    const { field, rng, params, worldSize: S } = ctx;
     const { noise, at } = fieldSampler(ctx, S);
     const group = new THREE.Group();
     const sand = new THREE.Color('#d8cfae'); const shade = new THREE.Color('#a89a76');
@@ -184,7 +184,7 @@ export const crystalPreset: NaturalScenePreset = {
       const cn = centers.length ? centers[Math.floor(rng.next() * centers.length)] : { x: 0, z: 0 };
       const x = cn.x + rng.gaussian(0, 1.2); const z = cn.z + rng.gaussian(0, 1.2);
       const f = at(x, z);
-      if (rng.next() > (0.15 + 0.85 * f) * params.density) continue;
+      if (rng.next() > (0.15 + 0.85 * f) * params.density * (0.05 + 0.95 * qrMask(field, x, z, S))) continue;
       const tall = 0.5 + f * 1.6;
       v.set(x, 0, z); e.set(rng.range(-0.25, 0.25), rng.range(0, 6), rng.range(-0.25, 0.25)); q.setFromEuler(e);
       s.set(rng.range(0.4, 1), tall * rng.range(0.7, 1.4), rng.range(0.4, 1)); m.compose(v, q, s);
@@ -202,7 +202,7 @@ export const crystalPreset: NaturalScenePreset = {
 export const mushroomPreset: NaturalScenePreset = {
   id: 'mushroom', name: 'Mushroom', icon: '🍄', description: 'Bioluminescent mushroom grove QR', qrWorldSize: 26,
   generate(ctx) {
-    const { rng, params, worldSize: S } = ctx;
+    const { field, rng, params, worldSize: S } = ctx;
     const { noise, at } = fieldSampler(ctx, S);
     const group = new THREE.Group();
     const mossL = new THREE.Color('#b9c98e'); const mossD = new THREE.Color('#4a5c33');
@@ -219,7 +219,7 @@ export const mushroomPreset: NaturalScenePreset = {
     while (n < N && guard-- > 0) {
       const x = rng.range(-S / 2, S / 2); const z = rng.range(-S / 2, S / 2);
       const f = at(x, z);
-      if (rng.next() > constrainByQR(0.35, Math.pow(f, 1.2), params.qrStrength) * params.density) continue;
+      if (rng.next() > constrainByQR(0.35, Math.pow(f, 1.2), params.qrStrength) * params.density * (0.05 + 0.95 * qrMask(field, x, z, S))) continue;
       v.set(x, 0, z); e.set(0, rng.range(0, 6), 0); q.setFromEuler(e);
       const sc = rng.range(0.5, 2.2) * (0.6 + params.height * 0.7); s.set(sc, sc, sc); m.compose(v, q, s);
       stems.setMatrixAt(n, m); caps.setMatrixAt(n, m);

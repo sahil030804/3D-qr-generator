@@ -3,7 +3,7 @@ import type { SceneGenerationContext } from '../core/generation/types';
 import { QUALITY_BUDGET, constrainByQR, qualityMultiplier } from '../core/generation/types';
 import { Noise2D } from '../core/generation/NoiseSystem';
 import type { NaturalScenePreset } from './Preset';
-import { makeGroundTexture } from './shared';
+import { makeGroundTexture, qrMask } from './shared';
 
 function sampler(ctx: SceneGenerationContext, S: number) {
   const { field, rng, params } = ctx;
@@ -18,7 +18,7 @@ function sampler(ctx: SceneGenerationContext, S: number) {
     at: (x: number, z: number) => {
       const u = x / S + 0.5;
       const v = z / S + 0.5;
-      if (u < 0 || u > 1 || v < 0 || v > 1) return 0.4;
+      if (u < 0 || u > 1 || v < 0 || v > 1) return 0.05;
       return field.combined(u, v, [0.35, 0.3, 0.35], warpFn);
     },
   };
@@ -28,7 +28,7 @@ function sampler(ctx: SceneGenerationContext, S: number) {
 export const coralPreset: NaturalScenePreset = {
   id: 'coral', name: 'Coral Reef', icon: '🪸', description: 'Coral garden with a hidden reef QR', qrWorldSize: 26,
   generate(ctx) {
-    const { rng, params, worldSize: S } = ctx;
+    const { field, rng, params, worldSize: S } = ctx;
     const { noise, at } = sampler(ctx, S);
     const group = new THREE.Group();
     const sand = new THREE.Color('#d9cf9f'); const deep = new THREE.Color('#7a6a4a');
@@ -55,7 +55,7 @@ export const coralPreset: NaturalScenePreset = {
     while (n < N && guard-- > 0) {
       const x = rng.range(-S / 2, S / 2); const z = rng.range(-S / 2, S / 2);
       const f = at(x, z);
-      if (rng.next() > constrainByQR(0.35, Math.pow(f, 1.25), params.qrStrength) * params.density) continue;
+      if (rng.next() > constrainByQR(0.35, Math.pow(f, 1.25), params.qrStrength) * params.density * (0.05 + 0.95 * qrMask(field, x, z, S))) continue;
       v.set(x, 0, z); e.set(rng.range(-0.2, 0.2), rng.range(0, 6), rng.range(-0.2, 0.2)); q.setFromEuler(e);
       const sc = rng.range(0.5, 1.8) * (0.6 + params.height * 0.7); s.set(sc, sc, sc); m.compose(v, q, s);
       inst.setMatrixAt(n, m);
@@ -83,7 +83,7 @@ export const coralPreset: NaturalScenePreset = {
 export const templePreset: NaturalScenePreset = {
   id: 'temple', name: 'Temple Garden', icon: '⛩️', description: 'Zen garden with a hidden stone QR', qrWorldSize: 28,
   generate(ctx) {
-    const { rng, params, worldSize: S } = ctx;
+    const { field, rng, params, worldSize: S } = ctx;
     const { noise, at } = sampler(ctx, S);
     const group = new THREE.Group();
     const gravel = new THREE.Color('#d5cfbb'); const mossD = new THREE.Color('#55603a');
@@ -126,7 +126,7 @@ export const templePreset: NaturalScenePreset = {
       const x = rng.range(-S / 2, S / 2); const z = rng.range(-S / 2, S / 2);
       if (Math.hypot(x, z) < 3.4) continue;
       const f = at(x, z);
-      if (rng.next() > Math.pow(f, 1.3) * params.density) continue;
+      if (rng.next() > Math.pow(f, 1.3) * params.density * (0.05 + 0.95 * qrMask(field, x, z, S))) continue;
       v.set(x, 0, z); e.set(0, rng.range(0, 6), 0); q.setFromEuler(e);
       const sc = rng.range(0.7, 1.5); s.set(sc, sc, sc); m.compose(v, q, s);
       pines.setMatrixAt(n, m); trunks.setMatrixAt(n, m);
@@ -155,7 +155,7 @@ export const templePreset: NaturalScenePreset = {
 export const cityPreset: NaturalScenePreset = {
   id: 'city', name: 'City', icon: '🏙️', description: 'Urban blocks with a hidden rooftop QR', qrWorldSize: 28,
   generate(ctx) {
-    const { rng, params, worldSize: S } = ctx;
+    const { field, rng, params, worldSize: S } = ctx;
     const { noise, at } = sampler(ctx, S);
     const group = new THREE.Group();
     const asphalt = new THREE.Color('#b9b7ae'); const parkG = new THREE.Color('#5f7a3c');
@@ -188,7 +188,7 @@ export const cityPreset: NaturalScenePreset = {
       const z = bz * cell + rng.gaussian(0, cell * 0.14);
       if (Math.abs(x) > S / 2 || Math.abs(z) > S / 2) continue;
       const f = at(x, z);
-      if (rng.next() > Math.pow(f, 1.1) * params.density + 0.02) continue;
+      if (rng.next() > (Math.pow(f, 1.1) * params.density + 0.02) * (0.05 + 0.95 * qrMask(field, x, z, S))) continue;
       const h = (1.5 + f * 5.5) * (0.6 + params.height * 0.8) * rng.range(0.7, 1.3);
       v.set(x, 0, z); e.set(0, rng.range(-0.09, 0.09), 0); q.setFromEuler(e);
       s.set(rng.range(1.4, 3.2), h, rng.range(1.4, 3.2)); m.compose(v, q, s);
@@ -217,7 +217,7 @@ export const cityPreset: NaturalScenePreset = {
 export const customPreset: NaturalScenePreset = {
   id: 'custom', name: 'Custom Meadow', icon: '✨', description: 'Balanced grove tuned for QR contrast', qrWorldSize: 26,
   generate(ctx) {
-    const { rng, params, worldSize: S } = ctx;
+    const { field, rng, params, worldSize: S } = ctx;
     const { noise, at } = sampler(ctx, S);
     const group = new THREE.Group();
     const light = new THREE.Color('#c9cfa5'); const dark = new THREE.Color('#55663a');
@@ -242,7 +242,7 @@ export const customPreset: NaturalScenePreset = {
     while (n < N && guard-- > 0) {
       const x = rng.range(-S / 2, S / 2); const z = rng.range(-S / 2, S / 2);
       const f = at(x, z);
-      if (rng.next() > constrainByQR(0.4, Math.pow(f, 1.25), params.qrStrength) * params.density) continue;
+      if (rng.next() > constrainByQR(0.4, Math.pow(f, 1.25), params.qrStrength) * params.density * (0.05 + 0.95 * qrMask(field, x, z, S))) continue;
       v.set(x, rng.range(0.4, 1.6 + params.height * 2), z);
       e.set(rng.range(0, 3), rng.range(0, 6), rng.range(0, 3)); q.setFromEuler(e);
       const sc = rng.range(0.5, 1.4); s.set(sc, sc * 0.8, sc); m.compose(v, q, s);

@@ -1,6 +1,25 @@
 import * as THREE from 'three';
 import { SeededRandom } from '../core/generation/SeededRandom';
 import { Noise2D } from '../core/generation/NoiseSystem';
+import type { QRField } from '../core/qr/QRField';
+
+/**
+ * 1 deep inside the QR data area → 0 in the quiet zone / outside.
+ * Smooth over ~2 modules so placements fade before the mandatory light border.
+ * Multiply acceptance probabilities by (0.05 + 0.95*mask) and ground darkening
+ * by mask to keep the quiet zone clean for detectors (and phone cameras).
+ */
+export function qrMask(field: QRField, x: number, z: number, worldSize: number): number {
+  const t = field.total;
+  const qz = field.quietZone;
+  const gx = (x / worldSize + 0.5) * t - qz;
+  const gy = (z / worldSize + 0.5) * t - qz;
+  const dx = Math.min(gx, field.qr.size - gx);
+  const dy = Math.min(gy, field.qr.size - gy);
+  const d = Math.min(dx, dy); // modules inside the data area (negative = quiet zone)
+  const s = Math.min(1, Math.max(0, (d + 1) / 2));
+  return s * s * (3 - 2 * s);
+}
 
 /** Procedural canvas texture: bark ridges with crevices + tonal variation. */
 export function makeBarkTexture(rng: SeededRandom): THREE.CanvasTexture {

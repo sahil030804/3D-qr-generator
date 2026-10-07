@@ -3,7 +3,7 @@ import type { SceneGenerationContext } from '../core/generation/types';
 import { QUALITY_BUDGET, constrainByQR, qualityMultiplier } from '../core/generation/types';
 import { Noise2D } from '../core/generation/NoiseSystem';
 import type { NaturalScenePreset } from './Preset';
-import { makeGroundTexture } from './shared';
+import { makeGroundTexture, qrMask } from './shared';
 
 /**
  * Cinematic forest: clustered multi-species stand. Dark QR modules grow
@@ -31,7 +31,7 @@ export const forestPreset: NaturalScenePreset = {
     const at = (x: number, z: number) => {
       const u = x / S + 0.5;
       const v = z / S + 0.5;
-      if (u < 0 || u > 1 || v < 0 || v > 1) return 0.4;
+      if (u < 0 || u > 1 || v < 0 || v > 1) return 0.05;
       return field.combined(u, v, [0.35, 0.3, 0.35], warpFn) * 0.65 + field.sharp(u, v) * 0.35;
     };
     const groundH = (x: number, z: number) => {
@@ -60,7 +60,7 @@ export const forestPreset: NaturalScenePreset = {
         const h = groundH(x, z);
         p.setY(i, h);
         const f = at(x, z);
-        c.copy(meadow).lerp(floor, Math.min(0.85, f * 0.8 * params.qrStrength + 0.15));
+        c.copy(meadow).lerp(floor, Math.min(0.85, f * 0.8 * params.qrStrength * qrMask(field, x, z, S) + 0.15));
         if (h > 1.6) c.lerp(rock, Math.min(0.6, (h - 1.6) * 0.5));
         const n = noise.unit(x * 0.8, z * 0.8, 2);
         c.offsetHSL(0, 0, (n - 0.5) * 0.05);
@@ -95,6 +95,8 @@ export const forestPreset: NaturalScenePreset = {
         const d = Math.hypot(x - c.x, z - c.z);
         cluster = Math.max(cluster, Math.exp(-(d * d) / (c.r * c.r)));
       }
+      const mask = qrMask(field, x, z, S);
+      if (mask < 0.85) continue;
       const f = at(x, z);
       const p = constrainByQR(cluster, Math.pow(f, 1.3), params.qrStrength) * params.density;
       if (rng.next() > p) continue;
@@ -210,7 +212,7 @@ export const forestPreset: NaturalScenePreset = {
       const x = rng.range(-S / 2, S / 2);
       const z = rng.range(-S / 2, S / 2);
       const f = at(x, z);
-      if (rng.next() > f * f * params.density) continue;
+      if (rng.next() > f * f * params.density * (0.05 + 0.95 * qrMask(field, x, z, S))) continue;
       vv.set(x, groundH(x, z) + 0.25, z);
       ee.set(0, rng.range(0, 6), 0);
       qq.setFromEuler(ee);

@@ -3,6 +3,7 @@ import type { SceneGenerationContext } from '../core/generation/types';
 import { QUALITY_BUDGET, constrainByQR } from '../core/generation/types';
 import { Noise2D } from '../core/generation/NoiseSystem';
 import type { NaturalScenePreset } from './Preset';
+import { qrMask } from './shared';
 import {
   makeBarkTexture,
   makeGroundTexture,
@@ -45,7 +46,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
     const at = (x: number, z: number) => {
       const u = x / S + 0.5;
       const v = z / S + 0.5;
-      if (u < 0 || u > 1 || v < 0 || v > 1) return 0.5;
+      if (u < 0 || u > 1 || v < 0 || v > 1) return 0.05;
       // crisp micro backbone (protects finders/timing) inside organic macro
       return field.combined(u, v, [0.35, 0.3, 0.35], warpFn) * 0.65 + field.sharp(u, v) * 0.35;
     };
@@ -61,7 +62,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
     {
       const p = groundGeo.attributes.position as THREE.BufferAttribute;
       const colors = new Float32Array(p.count * 3);
-      const base = new THREE.Color('#d2d7c0');
+      const base = new THREE.Color('#dbe1ca');
       const deep = new THREE.Color('#9aa184');
       const c = new THREE.Color();
       for (let i = 0; i < p.count; i++) {
@@ -69,7 +70,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
         const z = p.getZ(i);
         const f = at(x, z);
         const n = noise.unit(x * 0.25, z * 0.25, 3) * 0.5 + 0.5;
-        c.copy(base).lerp(deep, Math.min(0.6, f * 0.45 * params.qrStrength + (1 - n) * 0.12));
+        c.copy(base).lerp(deep, Math.min(0.6, f * 0.45 * params.qrStrength * qrMask(field, x, z, S) + (1 - n) * 0.12));
         colors[i * 3] = c.r;
         colors[i * 3 + 1] = c.g;
         colors[i * 3 + 2] = c.b;
@@ -104,6 +105,10 @@ export const cherryBlossomPreset: NaturalScenePreset = {
       const d = dir.clone();
       for (let i = 0; i < steps; i++) {
         // QR attraction: upper limbs bend toward dense (dark) canopy regions
+        if (qrMask(field, p.x, p.z, S) < 0.9) {
+          d.x -= ((p.x - trunkBase.x) / (S * 0.5)) * 0.9;
+          d.z -= ((p.z - trunkBase.z) / (S * 0.5)) * 0.9;
+        }
         if (depth >= 1 && Math.abs(p.x) < S / 2 && Math.abs(p.z) < S / 2) {
           const [gx, gz] = gradAt(p.x, p.z);
           const pull = (0.25 + params.qrStrength * 0.75) * (depth >= 2 ? 0.55 : 0.3);
@@ -143,7 +148,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
     };
 
     const trunkBase = new THREE.Vector3(rng.range(-1, 1), 0, rng.range(-1, 1));
-    grow(trunkBase, new THREE.Vector3(rng.range(-0.08, 0.08), 1, rng.range(-0.08, 0.08)).normalize(), H * 0.7, 1.0, 0);
+    grow(trunkBase, new THREE.Vector3(rng.range(-0.08, 0.08), 1, rng.range(-0.08, 0.08)).normalize(), H * 0.7, 0.8, 0);
     // roots
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2 + rng.range(-0.3, 0.3);
@@ -180,7 +185,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
     const e = new THREE.Euler();
     const sc = new THREE.Vector3();
     const pv = new THREE.Vector3();
-    const darkC = new THREE.Color('#182b14');
+    const darkC = new THREE.Color('#101e0c');
     const midC = new THREE.Color('#3f6132');
     const liteC = new THREE.Color('#5d7f43');
     const cc = new THREE.Color();
@@ -190,7 +195,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
       const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
       return t * t * (3 - 2 * t);
     };
-    const candidates = Math.round(canopyMax * 3 * areaK);
+    const candidates = Math.round(canopyMax * 6 * areaK);
     for (let i = 0; i < candidates && ia + ib < canopyMax; i++) {
       // uniform over the QR square with a noisy ragged rim (covers corner finders)
       const x = trunkBase.x + rng.range(-0.5, 0.5) * S * 0.98;
@@ -201,7 +206,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
       if (rim > 1 || rng.next() < smoothstep(0.86, 1.0, rim) * 0.9) continue;
       const f = at(x, z);
       // steep contrast curve: dark modules ~opaque, light modules nearly open
-      const p = 0.02 + 0.98 * smoothstep(0.32, 0.72, f) * Math.min(1, params.density + 0.15);
+      const p = (0.01 + 0.99 * smoothstep(0.38, 0.75, f) * Math.min(1, params.density + 0.15)) * (0.05 + 0.95 * qrMask(field, x, z, S));
       if (rng.next() > p) continue;
       // cloud-pruned dome: higher near middle, ragged edge
       const y = H * (0.8 + 0.35 * (1 - rim * rim)) + rng.gaussian(0, 0.45 + params.variation * 0.45);
@@ -259,7 +264,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
     // clusters around twig tips (natural), thinned where QR is dark
     for (const tip of twigTips) {
       const f = at(tip.pos.x, tip.pos.z);
-      const keep = Math.pow(1 - f, 1.6) * 0.6 + 0.01;
+      const keep = (Math.pow(1 - f, 1.6) * 0.6 + 0.01) * (0.1 + 0.9 * qrMask(field, tip.pos.x, tip.pos.z, S));
       if (rng.next() > keep * params.flowerDensity + 0.02) continue;
       const n = rng.int(3, 7);
       for (let k = 0; k < n && bi < blossoms.count; k++) {
@@ -280,7 +285,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
       const x = trunkBase.x + Math.cos(a) * r;
       const z = trunkBase.z + Math.sin(a) * r;
       const f = at(x, z);
-      if (rng.next() > (1 - f) * 0.5 * params.flowerDensity) continue;
+      if (rng.next() > (1 - f) * 0.5 * params.flowerDensity * (0.1 + 0.9 * qrMask(field, x, z, S))) continue;
       placeFlower(x, H * rng.range(0.5, 0.85) + rng.gaussian(0, 0.4), z, rng.range(0.45, 0.8));
     }
     blossoms.count = bi;
@@ -297,7 +302,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
       const x = rng.range(-S / 2, S / 2);
       const z = rng.range(-S / 2, S / 2);
       const f = at(x, z);
-      if (rng.next() > (1 - f) * 0.55) continue;
+      if (rng.next() > (1 - f) * 0.55 * (0.15 + 0.85 * qrMask(field, x, z, S))) continue;
       pv.set(x, 0.02 + rng.next() * 0.02, z);
       e.set(-Math.PI / 2 + rng.range(-0.4, 0.4), 0, rng.range(0, Math.PI * 2));
       q.setFromEuler(e);
