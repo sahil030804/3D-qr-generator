@@ -19,6 +19,7 @@
   --accent-fg: #0b0f1e;
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
   --ring: rgba(135, 147, 255, 0.55);
+  --menu-bg: rgba(20, 26, 44, 0.97);
 }
 
 .app[data-tone='light'] {
@@ -33,14 +34,15 @@
   --accent-fg: #ffffff;
   --shadow: 0 18px 44px rgba(40, 52, 90, 0.18);
   --ring: rgba(68, 82, 224, 0.45);
+  --menu-bg: rgba(255, 255, 255, 0.98);
 }
 
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; overflow: hidden; background: #070a12; }
-body { font-family: var(--font); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+html, body { height: 100%; margin: 0; overflow: hidden; background: #070a12; overscroll-behavior: none; }
+body { font-family: var(--font); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
 h1, h2, p { margin: 0; }
 button, input { font: inherit; color: inherit; }
-button { cursor: pointer; }
+button { cursor: pointer; touch-action: manipulation; }
 [hidden] { display: none !important; }
 :focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
 
@@ -49,7 +51,12 @@ button { cursor: pointer; }
   clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-.app { position: fixed; inset: 0; overflow: hidden; color: var(--fg); }
+/* --app-top / --app-height follow the visible viewport (set from script while a phone keyboard is open). */
+.app {
+  position: fixed; top: var(--app-top, 0px); left: 0; width: 100%; height: var(--app-height, 100%); overflow: hidden; color: var(--fg);
+  --panel: 0px; --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px); --safe-right: env(safe-area-inset-right, 0px);
+}
 
 /* Sky */
 .sky { position: absolute; inset: 0; z-index: 0; }
@@ -94,7 +101,8 @@ button { cursor: pointer; }
 
 /* Top bar */
 .topbar {
-  position: absolute; top: 0; left: 0; right: 0; z-index: 3; padding: 16px 20px;
+  position: absolute; top: 0; left: 0; right: 0; z-index: 3;
+  padding: calc(16px + var(--safe-top)) calc(20px + var(--safe-right)) 16px calc(20px + var(--safe-left));
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; pointer-events: none;
 }
 .topbar > * { pointer-events: auto; }
@@ -127,7 +135,7 @@ button { cursor: pointer; }
 @keyframes pulse { 50% { opacity: 0.3; } }
 
 .hint {
-  position: absolute; left: 50%; bottom: calc(var(--dock-height) + 30px); transform: translateX(-50%); z-index: 3;
+  position: absolute; left: 50%; bottom: calc(var(--dock-height) + 30px + var(--safe-bottom)); transform: translateX(-50%); z-index: 3;
   max-width: calc(100% - 40px); padding: 7px 14px; border-radius: 999px; text-align: center;
   font-size: 0.8rem; font-weight: 550; color: var(--fg); pointer-events: none;
   background: var(--glass); border: 1px solid var(--glass-border);
@@ -136,7 +144,7 @@ button { cursor: pointer; }
 
 /* Dock */
 .dock {
-  position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 4;
+  position: absolute; left: 50%; bottom: calc(16px + var(--safe-bottom)); transform: translateX(-50%); z-index: 4;
   width: min(780px, calc(100% - 32px)); padding: 12px; border-radius: var(--radius-lg);
   background: var(--glass); border: 1px solid var(--glass-border); box-shadow: var(--shadow);
   backdrop-filter: blur(22px) saturate(1.35); -webkit-backdrop-filter: blur(22px) saturate(1.35);
@@ -171,7 +179,7 @@ button { cursor: pointer; }
 .save-wrap { position: relative; }
 .menu {
   position: absolute; right: 0; bottom: calc(100% + 10px); min-width: 230px; padding: 6px; border-radius: var(--radius);
-  background: var(--glass-strong); border: 1px solid var(--glass-border); box-shadow: var(--shadow);
+  background: var(--menu-bg); border: 1px solid var(--glass-border); box-shadow: var(--shadow);
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); animation: pop 0.16s var(--ease);
 }
 @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(0.98); } }
@@ -218,14 +226,14 @@ button { cursor: pointer; }
 .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2.5px solid var(--glass-border); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .toast {
-  position: absolute; left: 50%; top: 76px; transform: translate(-50%, -8px); z-index: 6; padding: 9px 16px; border-radius: 999px;
+  position: absolute; left: 50%; top: calc(76px + var(--safe-top)); transform: translate(-50%, -8px); z-index: 6; padding: 9px 16px; border-radius: 999px;
   font-size: 0.84rem; font-weight: 600; opacity: 0; pointer-events: none; background: var(--glass-strong); border: 1px solid var(--glass-border);
   box-shadow: var(--shadow); transition: opacity 0.25s, transform 0.25s var(--ease);
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 /* Info dialog */
-.info { width: min(520px, calc(100% - 32px)); padding: 22px; border-radius: var(--radius-lg); border: 1px solid var(--glass-border); background: var(--glass-strong); color: var(--fg); box-shadow: var(--shadow); }
+.info { width: min(520px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; padding: 22px; border-radius: var(--radius-lg); border: 1px solid var(--glass-border); background: var(--glass-strong); color: var(--fg); box-shadow: var(--shadow); }
 .info::backdrop { background: rgba(5, 8, 16, 0.55); backdrop-filter: blur(6px); }
 .info-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .info h2 { font-size: 1.15rem; letter-spacing: -0.01em; }
@@ -236,16 +244,21 @@ button { cursor: pointer; }
 .info-steps span { font-size: 0.85rem; color: var(--muted); }
 .info-note { font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
 
-/* Small screens */
+/* Wider screens: one options row, a little more room. */
+@media (min-width: 1000px) {
+  .dock { width: min(940px, calc(100% - 48px)); }
+}
+
+/* Tablets and phones */
 @media (max-width: 720px) {
   .segment-text { display: none; }
   .segment { padding: 8px 10px; }
 }
 @media (max-width: 640px) {
-  .topbar { padding: 12px 14px; grid-template-columns: auto 1fr auto; gap: 8px; }
+  .topbar { padding: calc(12px + var(--safe-top)) calc(14px + var(--safe-right)) 12px calc(14px + var(--safe-left)); grid-template-columns: auto 1fr auto; gap: 8px; }
   .topbar .verify { justify-self: center; font-size: 0.74rem; padding: 6px 11px; }
   .brand-name { display: none; }
-  .dock { bottom: 10px; width: calc(100% - 20px); padding: 10px; gap: 8px; }
+  .dock { bottom: calc(10px + var(--safe-bottom)); width: calc(100% - 20px - var(--safe-left) - var(--safe-right)); padding: 10px; gap: 8px; }
   .link-row { flex-wrap: wrap; }
   .field { flex: 1 1 100%; }
   .link-row .save-wrap { flex: 1; }
@@ -257,6 +270,63 @@ button { cursor: pointer; }
   .pill-label { padding: 8px 4px; font-size: 0.74rem; white-space: nowrap; }
   .pill-label svg { display: none; }
   .hint { font-size: 0.74rem; }
+  /* The menu spans the dock so it can never run off a narrow screen. */
+  .save-wrap { position: static; }
+  .menu { left: 0; right: 0; min-width: 0; }
+}
+/* Very small phones: tighter labels so all four objects stay on one row. */
+@media (max-width: 359px) {
+  .pills { gap: 2px; padding: 3px; }
+  .pill { min-width: 0; }
+  .pill-label { padding: 9px 2px; font-size: 0.68rem; letter-spacing: -0.01em; }
+}
+
+/* Touch screens: bigger targets, and 16px text so iOS does not zoom into the field. */
+@media (pointer: coarse) {
+  .link-input { font-size: 16px; }
+  .btn { height: 48px; }
+  .btn.small { height: 42px; }
+  .icon-btn { width: 44px; height: 44px; }
+  .pill-label { padding-top: 10px; padding-bottom: 10px; }
+  .segment { min-height: 40px; }
+  .swatch { width: 34px; height: 34px; }
+  .menu-item { padding: 12px 14px; }
+}
+
+/* Short landscape screens (phones on their side): controls become a side panel, the model gets the rest. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .app { --panel: min(340px, 44vw); }
+  .app:not(.embed) .stage { left: calc(var(--panel) + 24px + var(--safe-left)); }
+  .dock {
+    left: calc(12px + var(--safe-left)); bottom: calc(12px + var(--safe-bottom)); transform: none;
+    width: var(--panel); padding: 10px; gap: 8px; border-radius: 18px;
+  }
+  .hint, .loading { left: calc(var(--panel) + 24px + var(--safe-left) + (100% - var(--panel) - 24px - var(--safe-left)) / 2); }
+  .hint { bottom: calc(12px + var(--safe-bottom)); max-width: calc(100% - var(--panel) - 60px); }
+  .loading { top: 50%; }
+  .link-row { flex-wrap: wrap; }
+  .field { flex: 1 1 100%; }
+  .link-row .save-wrap { flex: 1; position: static; }
+  .link-row .save-wrap .btn { width: 100%; }
+  .link-row > .btn { flex: 2; }
+  .link-input { height: 42px; }
+  .btn { height: 42px; }
+  .pills { flex: 1 1 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .pill { text-align: center; }
+  .pill-label { padding: 7px 4px; font-size: 0.78rem; white-space: nowrap; }
+  .pill-label svg { display: none; }
+  .options-row { gap: 6px 8px; }
+  .segment-text { display: none; }
+  .photo-name { display: none; }
+  .photo-options { width: 100%; }
+  /* Open the menu beside the panel rather than above it. */
+  .menu { left: calc(100% + 22px); right: auto; bottom: -2px; width: 250px; min-width: 0; }
+  .toast { top: calc(60px + var(--safe-top)); }
+}
+
+/* With the keyboard up on a short screen, hide the options so the field and the model stay in view. */
+@media (max-height: 480px) {
+  .app.typing .options-row { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -285,15 +355,18 @@ button { cursor: pointer; }
 }
 
 /* Full-screen scan */
-.scan-overlay { position: fixed; inset: 0; z-index: 30; display: grid; grid-template-rows: 1fr auto; place-items: center; background: #ffffff; padding: 16px; cursor: zoom-out; }
-.scan-overlay img { width: min(100%, calc(100vh - 80px)); height: auto; max-height: calc(100vh - 80px); object-fit: contain; image-rendering: auto; }
+.scan-overlay {
+  position: fixed; inset: 0; z-index: 30; display: grid; grid-template-rows: 1fr auto; place-items: center; background: #ffffff; cursor: zoom-out;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
+}
+.scan-overlay img { width: min(100%, calc(100dvh - 90px)); height: auto; max-height: calc(100dvh - 90px); object-fit: contain; image-rendering: auto; }
 .scan-caption { margin-top: 10px; font-size: 0.85rem; color: #4a5060; text-align: center; }
 
 /* Embed mode (?embed=1): only the interactive view, no app chrome */
 html.embed-transparent, html.embed-transparent body { background: transparent; }
 .app.embed .topbar, .app.embed .dock, .app.embed .hint, .app.embed .toast, .app.embed .drop-overlay { display: none !important; }
 .app.embed[data-bg='transparent'] .sky { display: none; }
-.embed-controls { position: absolute; left: 0; right: 0; bottom: 12px; z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+.embed-controls { position: absolute; left: 0; right: 0; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
 .embed-hint {
   padding: 6px 12px; border-radius: 999px; font-size: 0.76rem; font-weight: 550; color: var(--fg);
   background: var(--glass); border: 1px solid var(--glass-border); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);

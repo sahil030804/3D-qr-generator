@@ -21,6 +21,8 @@ type LookChoice = 'auto' | LookName;
 
 /** Id used for the uploaded-photo mode; it is not one of the built-in objects. */
 const PHOTO_ID = 'photo';
+/** Matches the short landscape layout in styles.css, where the controls become a side panel. */
+const SIDE_PANEL_QUERY = '(orientation: landscape) and (max-height: 520px)';
 const LOOK_LABELS: [LookChoice, string, string][] = [
   ['auto', 'Auto', 'Pick the most photo-like look that still scans'],
   ['soft', 'Photo-like', 'Keeps your photo as it is'],
@@ -137,6 +139,8 @@ export class App {
     if (this.embed) this.startEmbed(this.embed);
 
     new ResizeObserver(() => this.syncInsets()).observe(this.dock);
+    window.matchMedia?.(SIDE_PANEL_QUERY).addEventListener?.('change', () => this.syncInsets());
+    this.trackKeyboard();
     document.addEventListener('keydown', (event) => this.onKey(event));
     document.addEventListener('click', (event) => {
       const target = event.target as Node;
@@ -635,6 +639,23 @@ export class App {
     }
   }
 
+  /** Keep the app inside the visible area while a phone keyboard is open, and tuck the options away on short screens. */
+  private trackKeyboard(): void {
+    const viewport = window.visualViewport;
+    if (viewport) {
+      const fit = (): void => {
+        const covered = window.innerHeight - viewport.height - viewport.offsetTop;
+        const shifted = viewport.offsetTop > 1 || covered > 80;
+        this.root.style.setProperty('--app-top', shifted ? `${viewport.offsetTop}px` : '0px');
+        this.root.style.setProperty('--app-height', shifted ? `${viewport.height}px` : '100%');
+      };
+      viewport.addEventListener('resize', fit);
+      viewport.addEventListener('scroll', fit);
+    }
+    this.input.addEventListener('focus', () => this.root.classList.add('typing'));
+    this.input.addEventListener('blur', () => this.root.classList.remove('typing'));
+  }
+
   private syncInsets(): void {
     const dockHeight = this.dock.offsetHeight;
     const compact = window.innerWidth < 640;
@@ -644,7 +665,15 @@ export class App {
       this.viewer?.setInsets({ top: 0, bottom });
       return;
     }
-    this.viewer?.setInsets({ top: compact ? 64 : 72, bottom: dockHeight + (compact ? 64 : 76) });
+    if (window.matchMedia?.(SIDE_PANEL_QUERY).matches) {
+      // The controls sit in a side panel and the stage is narrower, so only the top bar and hint take vertical room.
+      this.viewer?.setInsets({ top: 56, bottom: 56 });
+      this.root.style.setProperty('--dock-height', '0px');
+      return;
+    }
+    // The hint wraps to two lines on the narrowest phones, so it needs more room above the dock there.
+    const hintRoom = window.innerWidth < 400 ? 84 : compact ? 64 : 76;
+    this.viewer?.setInsets({ top: compact ? 64 : 72, bottom: dockHeight + hintRoom });
     this.root.style.setProperty('--dock-height', `${dockHeight}px`);
   }
 
