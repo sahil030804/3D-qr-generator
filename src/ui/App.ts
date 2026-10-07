@@ -9,6 +9,7 @@ import { ICONS, LOGO } from './icons';
 import { IDLE_ELEVATION } from '../render/timeline';
 import { embedSnippet, embedUrl, parseCommand, parseEmbed, type EmbedEvent, type EmbedOptions } from './embed';
 import { PhotoReadError, PhotoSession } from './photoSession';
+import { BlockedImageError, fetchPhotoFile, parseImageUrl, proxiedUrl } from './photoUrl';
 import { readState, writeQuery, type AppState } from './state';
 import { decodeImage } from './verify';
 import type { LookName } from '../photo/scanColors';
@@ -105,6 +106,9 @@ export class App {
   private readonly scanImage = el('img');
   private scanUrl: string | null = null;
   private readonly fileInput = el('input');
+  private readonly sourceDialog = el('dialog');
+  private readonly urlInput = el('input');
+  private readonly urlError = el('p');
   private readonly photoRow = el('div', 'photo-options');
   private readonly photoName = el('span', 'photo-name');
   private readonly dropOverlay = el('div', 'drop-overlay', 'Drop a photo to turn it into a 3D relief');
@@ -132,7 +136,7 @@ export class App {
     }
 
     this.regular = { objectId: this.state.objectId, variantId: this.state.variantId };
-    root.append(this.buildSky(), this.stage, this.buildTopbar(), this.hint, this.buildDock(), this.loading, this.toast, this.buildInfo(), this.dropOverlay, this.buildScanOverlay(), this.buildEmbedControls());
+    root.append(this.buildSky(), this.stage, this.buildTopbar(), this.hint, this.buildDock(), this.loading, this.toast, this.buildInfo(), this.buildSourceDialog(), this.dropOverlay, this.buildScanOverlay(), this.buildEmbedControls());
     this.viewer = new Viewer(this.stage, (viewerState) => this.onViewer(viewerState));
     this.viewer.setTimeOfDay(this.state.time);
     this.applyTime();
@@ -192,7 +196,7 @@ export class App {
     info.innerHTML = ICONS.info;
     info.setAttribute('aria-label', 'How it works');
     info.title = 'How it works';
-    info.addEventListener('click', () => (this.root.querySelector('dialog') as HTMLDialogElement).showModal());
+    info.addEventListener('click', () => (this.root.querySelector('dialog[aria-labelledby="info-title"]') as HTMLDialogElement).showModal());
     actions.append(share, info);
 
     bar.append(brand, this.verify, actions);
@@ -354,7 +358,7 @@ export class App {
       ['Paste a link', `Anything up to ${MAX_QR_CHARS} characters. The code uses the highest error correction.`],
       ['Meet your model', 'Pick an object, color and time of day. The code is laid into the ground tiles and grows through the model\'s surfaces.'],
       ['Tap to reveal', 'The camera lifts overhead, the lighting flattens and the model\'s own colors resolve into the code. Scan it straight off the screen.'],
-      ['Or use your own photo', 'Choose Your photo (or drop an image anywhere). It becomes an embossed 3D relief whose colors resolve into a scannable code, tuned automatically so it still reads.'],
+      ['Or use your own photo', 'Choose Your photo, then upload one, paste a public image link, or drop an image anywhere. It becomes an embossed 3D relief whose colors resolve into a scannable code, tuned automatically so it still reads.'],
       ['Check and share', 'We decode the rendered image in your browser and show a verified badge. Save a PNG or a print-ready SVG, or copy a share link.'],
     ];
     for (const [heading, body] of copy) {
@@ -362,7 +366,7 @@ export class App {
       item.append(el('strong', '', heading), el('span', '', body));
       steps.append(item);
     }
-    const privacy = el('p', 'info-note', 'Everything runs in your browser. Your text and photos are never uploaded, and there is no account or tracking. For the easiest scan, open Save → Full-screen scan. The first photo downloads a small depth model (about 27 MB) once and keeps it in your browser.');
+    const privacy = el('p', 'info-note', 'Everything runs in your browser. Your text and photos are never uploaded, and there is no account or tracking. (An image link is fetched by your browser straight from its own site; if that site blocks it, the link is retried through the images.weserv.nl proxy.) For the easiest scan, open Save → Full-screen scan. The first photo downloads a small depth model (about 27 MB) once and keeps it in your browser.');
     const keys = el('p', 'info-note', 'Shortcuts: Space or R reveals, T changes the time of day, arrow keys rotate.');
     dialog.append(head, steps, privacy, keys);
     dialog.addEventListener('click', (event) => {
@@ -378,7 +382,7 @@ export class App {
     const change = el('button', 'btn ghost small');
     change.type = 'button';
     change.innerHTML = `${ICONS.upload}<span>Change photo</span>`;
-    change.addEventListener('click', () => this.fileInput.click());
+    change.addEventListener('click', () => this.openSourceDialog());
 
     const looks = el('div', 'segmented');
     looks.setAttribute('role', 'radiogroup');
@@ -400,6 +404,97 @@ export class App {
       looks.append(label);
     }
     this.photoRow.append(change, this.photoName, looks);
+  }
+
+  /** Where a photo comes from: this device, or a public link to an image. */
+  private buildSourceDialog(): HTMLElement {
+    const dialog = this.sourceDialog;
+    dialog.className = 'info source-dialog';
+    dialog.setAttribute('aria-labelledby', 'source-title');
+    let chosen = false;
+
+    const head = el('div', 'info-head');
+    const title = el('h2', '', 'Choose a photo');
+    title.id = 'source-title';
+    const close = el('button', 'icon-btn');
+    close.type = 'button';
+    close.innerHTML = ICONS.close;
+    close.setAttribute('aria-label', 'Close');
+    close.addEventListener('click', () => dialog.close());
+    head.append(title, close);
+
+    const upload = el('button', 'btn ghost source-upload');
+    upload.type = 'button';
+    upload.innerHTML = `${ICONS.upload}<span>Upload from this device</span>`;
+    upload.addEventListener('click', () => {
+      chosen = true;
+      dialog.close();
+      this.fileInput.click();
+    });
+
+    const form = el('form', 'source-form');
+    const label = el('label', 'source-label', 'Or use a public image link');
+    this.urlInput.type = 'url';
+    this.urlInput.inputMode = 'url';
+    this.urlInput.placeholder = 'https://example.com/picture.jpg';
+    this.urlInput.autocomplete = 'off';
+    this.urlInput.spellcheck = false;
+    this.urlInput.autocapitalize = 'off';
+    this.urlInput.className = 'link-input source-input';
+    label.append(this.urlInput);
+    const load = el('button', 'btn primary');
+    load.type = 'submit';
+    load.textContent = 'Load image';
+    this.urlError.className = 'source-error';
+    this.urlError.setAttribute('role', 'alert');
+    form.append(label, load);
+    // Download the picture and hand it to the photo pipeline. If the site refuses a cross-site read, retry through the proxy.
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void (async () => {
+        this.urlError.textContent = '';
+        load.disabled = true;
+        load.textContent = 'Loading…';
+        try {
+          const original = parseImageUrl(this.urlInput.value);
+          let file: File;
+          try {
+            file = await fetchPhotoFile(original);
+          } catch (error) {
+            if (!(error instanceof BlockedImageError)) throw error;
+            try {
+              file = await fetchPhotoFile(proxiedUrl(original), fetch, original);
+            } catch {
+              throw new PhotoReadError('Could not load that image. Check that the link is public and points straight to a picture.');
+            }
+          }
+          chosen = true;
+          dialog.close();
+          void this.loadPhoto(file);
+        } catch (error) {
+          this.urlError.textContent = error instanceof PhotoReadError ? error.message : 'Could not load that image.';
+        } finally {
+          load.disabled = false;
+          load.textContent = 'Load image';
+        }
+      })();
+    });
+
+    const note = el('p', 'info-note', 'Your browser fetches the image straight from its site. If that site does not allow it, the link is retried through the images.weserv.nl proxy, which then sees the link. Nothing goes through our servers.');
+    dialog.append(head, upload, form, this.urlError, note);
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    dialog.addEventListener('close', () => {
+      if (!chosen) this.restoreObjectRadio();
+      chosen = false;
+    });
+    return dialog;
+  }
+
+  private openSourceDialog(): void {
+    this.urlError.textContent = '';
+    this.sourceDialog.showModal();
   }
 
   private attachDrop(): void {
@@ -440,7 +535,7 @@ export class App {
       void this.generate();
       return;
     }
-    this.fileInput.click();
+    this.openSourceDialog();
   }
 
   /** The user dismissed the file dialog: put the selection back on the object that is showing. */

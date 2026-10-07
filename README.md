@@ -27,12 +27,13 @@ Build a model, then **Save → Copy embed code** and paste the iframe into any p
 
 ## Your own photo
 
-Choose **Your photo** (or drop an image anywhere) to turn a picture into an embossed 3D relief that resolves into a scannable QR code.
+Choose **Your photo** and upload a picture, paste a public image link, or drop an image anywhere to turn it into an embossed 3D relief that resolves into a scannable QR code.
 
 - A small depth model (Depth Anything V2, about 27 MB) is downloaded once and cached in the browser; without it, a built-in relief is used so a photo always works. Set `VITE_DEPTH_MODEL_URL` to host the model yourself.
 - The code is a real, valid QR whose black-and-white pattern is steered to follow your picture (a "QArt" encoder in `src/photo/qart.ts`), so only a few modules need to be nudged. Only the center of those modules is adjusted, just enough for a camera to read.
 - **Scan strength** is tuned automatically: the most photo-like look that still decodes, including through simulated camera blur, is chosen, and the rendered result is verified with ZXing (WebAssembly, loaded only in photo mode). Override it with Photo-like, Balanced or Easy scan.
 - The code is kept as small as the link allows (the smallest version with room to steer), because bigger modules are what phones read most reliably. For the easiest scan open **Save → Full-screen scan**.
+- Image links are fetched by your browser straight from their own site. If the site does not allow cross-origin reads (CORS), the link is automatically retried through the images.weserv.nl proxy, which then sees the link (and any signature in it). Hosts that allow CORS never involve the proxy.
 - Photos never leave the browser. Photo mode needs WebGL 2. Share links do not include the photo.
 
 ## Features
