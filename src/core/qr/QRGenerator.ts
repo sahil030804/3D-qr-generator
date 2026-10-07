@@ -9,19 +9,24 @@ export interface QRData {
   version: number;
 }
 
-const MAX_QR_BYTES = 1200;
+export const QUIET_ZONE_MODULES = 4;
+export const MAX_QR_CHARS = 120;
 
 /** Generate a QR matrix with HIGH error correction. Throws on invalid input. */
 export function generateQRMatrix(content: string): QRData {
   const text = (content ?? '').trim();
   if (!text) throw new QRInputError('Enter some text or a URL first.');
-  if (text.length > MAX_QR_BYTES) {
-    throw new QRInputError(`Input too long (${text.length} chars). Keep it under ${MAX_QR_BYTES} characters.`);
+  if (text.length > MAX_QR_CHARS) {
+    throw new QRInputError(`Input too long (${text.length} chars). Keep it under ${MAX_QR_CHARS} characters.`);
   }
   // typeNumber 0 = automatic version selection
   const qr = qrcode(0, 'H');
-  qr.addData(text);
-  qr.make();
+  try {
+    qr.addData(text);
+    qr.make();
+  } catch {
+    throw new QRInputError('That text is too long for a QR code. Try a shorter URL or message.');
+  }
   const size = qr.getModuleCount();
   const matrix: boolean[][] = [];
   for (let r = 0; r < size; r++) {
