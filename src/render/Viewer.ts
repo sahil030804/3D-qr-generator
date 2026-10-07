@@ -282,7 +282,7 @@ export class Viewer {
     const available = Math.max(0.25, 1 - (insets.top + insets.bottom) / cssHeight);
     const fit = (vertical: number, horizontal: number): number => Math.max(vertical / available, horizontal / aspect);
     return {
-      scene: fit(size * 0.8, size * 0.78),
+      scene: fit(size * 0.68, size * 0.66),
       top: fit(size * 0.56, size * 0.56),
     };
   }

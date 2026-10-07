@@ -3,3 +3,10 @@ dist/
 *.log
 src/**/*.js
 src/graphify-out/
+# Capacitor / Android (regenerable via `npm run cap:sync` + Gradle build)
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+*.apk
+!voxel-qr-debug.apk

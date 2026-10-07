@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Voxel QR</string>
+    <string name="title_activity_main">Voxel QR</string>
+    <string name="package_name">com.voxelqr.app</string>
+    <string name="custom_url_scheme">com.voxelqr.app</string>
+</resources>

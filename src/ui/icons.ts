@@ -15,6 +15,7 @@ export const ICONS = {
   photo: wrap('<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 9"/>'),
   upload: wrap('<path d="M12 16V4M8 8l4-4 4 4M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>'),
   close: wrap('<path d="M6 6l12 12M18 6L6 18"/>'),
+  chevron: wrap('<path d="M6 9l6 6 6-6"/>'),
 };
 
 export const LOGO = `<svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true" focusable="false">

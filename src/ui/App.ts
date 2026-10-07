@@ -1,6 +1,6 @@
 import { generateQRMatrix, MAX_QR_CHARS, QRInputError, type QRData } from '../core/qr/QRGenerator';
 import { qrToSvg } from '../core/qr/qrSvg';
-import { getObject, OBJECTS, getCategories, getObjectsByCategory, getCategoryForObject, type VoxelObject } from '../objects';
+import { getObject, OBJECTS, type VoxelObject } from '../objects';
 import { LIGHTING, TIMES_OF_DAY, type TimeOfDay } from '../render/lighting';
 import { buildMesh } from '../render/mesher';
 import { Viewer, type ViewerState } from '../render/Viewer';
@@ -10,8 +10,10 @@ import { IDLE_ELEVATION } from '../render/timeline';
 import { embedSnippet, embedUrl, parseCommand, parseEmbed, type EmbedEvent, type EmbedOptions, type EmbedPhoto } from './embed';
 import { embedDataToFile, photoToEmbedData, PhotoReadError, PhotoSession } from './photoSession';
 import { BlockedImageError, fetchPhotoFile, parseImageUrl, proxiedUrl } from './photoUrl';
+import { ModelPicker } from './ModelPicker';
 import { readState, writeQuery, type AppState } from './state';
 import { decodeImage } from './verify';
+import { isNative, shareFileNative, shareUrlNative } from './native';
 import type { LookName } from '../photo/scanColors';
 
 const DEFAULT_STATE: AppState = { text: 'https://example.com', objectId: OBJECTS[0].id, variantId: OBJECTS[0].variants[0].id, time: 'night' };
@@ -95,6 +97,7 @@ export class App {
   private readonly saveButton = el('button', 'btn ghost');
   private readonly saveMenu = el('div', 'menu');
   private readonly dock = el('section', 'dock');
+  private readonly dockToggle = el('button', 'dock-toggle');
   private readonly variantRow = el('div', 'variants');
   private readonly embed: EmbedOptions | null = parseEmbed(window.location.search, window.location.hash);
   private readonly embedBar = el('div', 'embed-controls');
@@ -117,8 +120,7 @@ export class App {
   private look: LookChoice = 'auto';
   /** The built-in object to restore (and to write into share links) while photo mode is active. */
   private regular = { objectId: OBJECTS[0].id, variantId: OBJECTS[0].variants[0].id };
-  private readonly categorySelect = el('select', 'picker');
-  private readonly modelSelect = el('select', 'picker');
+  private readonly picker = new ModelPicker((object) => this.chooseObject(object));
   private readonly photoButton = el('button', 'btn ghost small');
   private readonly timeInputs = new Map<TimeOfDay, HTMLInputElement>();
 
@@ -139,7 +141,7 @@ export class App {
     }
 
     this.regular = { objectId: this.state.objectId, variantId: this.state.variantId };
-    root.append(this.buildSky(), this.stage, this.buildTopbar(), this.hint, this.buildDock(), this.loading, this.toast, this.buildInfo(), this.buildSourceDialog(), this.dropOverlay, this.buildScanOverlay(), this.buildEmbedControls());
+    root.append(this.buildSky(), this.stage, this.buildTopbar(), this.hint, this.buildDock(), this.loading, this.toast, this.buildInfo(), this.buildSourceDialog(), this.dropOverlay, this.buildScanOverlay(), this.buildEmbedControls(), this.picker.panel);
     this.viewer = new Viewer(this.stage, (viewerState) => this.onViewer(viewerState));
     this.viewer.setTimeOfDay(this.state.time);
     this.applyTime();
@@ -155,6 +157,8 @@ export class App {
     });
 
     this.attachDrop();
+    this.restoreGuideSeen();
+    this.restoreDock();
     this.syncInsets();
     this.onViewer({ mode: 'object', busy: false, renderer: this.viewer.rendererKind });
     if (this.embed?.photo) void this.loadEmbedPhoto(this.embed.photo);
@@ -178,8 +182,7 @@ export class App {
       this.regular = { objectId: this.state.objectId, variantId: this.state.variantId };
       this.photoRow.hidden = true;
       this.variantRow.hidden = false;
-      this.categorySelect.disabled = false;
-      this.modelSelect.disabled = false;
+      this.picker.setDisabled(false);
       this.syncObjectPickers();
       this.renderVariants();
       this.setVerify('fail');
@@ -237,6 +240,14 @@ export class App {
   private buildDock(): HTMLElement {
     const dock = this.dock;
     dock.setAttribute('aria-label', 'Controls');
+
+    // Mobile grabber: collapses the configuration rows so the model gets the screen.
+    this.dockToggle.type = 'button';
+    this.dockToggle.innerHTML = ICONS.chevron;
+    this.dockToggle.setAttribute('aria-label', 'Collapse controls');
+    this.dockToggle.setAttribute('aria-expanded', 'true');
+    this.dockToggle.addEventListener('click', () => this.setDockCollapsed(!this.root.classList.contains('dock-collapsed')));
+    dock.append(this.dockToggle);
 
     // Row 1: link field, save, reveal.
     const row1 = el('div', 'row link-row');
@@ -298,24 +309,9 @@ export class App {
     // Row 2: category, model, photo, color, time of day.
     const row2 = el('div', 'row options-row');
     const pickers = el('div', 'pickers');
-    const categoryLabel = el('label', 'picker-label', 'Category');
-    this.categorySelect.setAttribute('aria-label', 'Category');
-    for (const category of getCategories()) {
-      const option = document.createElement('option');
-      option.value = category.id;
-      option.textContent = category.name;
-      this.categorySelect.append(option);
-    }
-    this.categorySelect.addEventListener('change', () => this.chooseCategory(this.categorySelect.value));
-    categoryLabel.append(this.categorySelect);
-    const modelLabel = el('label', 'picker-label', 'Design');
-    this.modelSelect.setAttribute('aria-label', 'Design');
-    this.modelSelect.addEventListener('change', () => {
-      const object = getObject(this.modelSelect.value);
-      this.chooseObject(object);
-    });
-    modelLabel.append(this.modelSelect);
-    pickers.append(categoryLabel, modelLabel);
+    const designLabel = el('div', 'picker-label');
+    designLabel.append(el('span', '', 'Design'), this.picker.trigger);
+    pickers.append(designLabel);
 
     this.photoButton.type = 'button';
     this.photoButton.innerHTML = `${ICONS.photo}<span>Your photo</span>`;
@@ -575,21 +571,9 @@ export class App {
     this.syncObjectPickers();
   }
 
-  /** Rebuild the design dropdown for a category and keep the selection valid. */
+  /** Show the design that is (or, in photo mode, will come back) on the design picker. */
   private syncObjectPickers(): void {
-    const currentId = this.state.objectId === PHOTO_ID ? this.regular.objectId : this.state.objectId;
-    const current = getObject(currentId);
-    if (!this.categorySelect.options.length) return;
-    this.categorySelect.value = current.category;
-    const models = getObjectsByCategory(current.category);
-    this.modelSelect.replaceChildren();
-    for (const object of models) {
-      const option = document.createElement('option');
-      option.value = object.id;
-      option.textContent = object.name;
-      this.modelSelect.append(option);
-    }
-    this.modelSelect.value = current.id;
+    this.picker.setCurrent(this.state.objectId === PHOTO_ID ? this.regular.objectId : this.state.objectId);
   }
 
   private async loadPhoto(file: File): Promise<void> {
@@ -615,8 +599,7 @@ export class App {
 
   private enterPhotoMode(): void {
     this.state.objectId = PHOTO_ID;
-    this.categorySelect.disabled = true;
-    this.modelSelect.disabled = true;
+    this.picker.setDisabled(true);
     this.variantRow.hidden = true;
     this.photoRow.hidden = false;
     this.viewer.setRestingView(0.95, 0.12);
@@ -626,8 +609,7 @@ export class App {
     if (this.state.objectId !== PHOTO_ID) return;
     this.photoRow.hidden = true;
     this.variantRow.hidden = false;
-    this.categorySelect.disabled = false;
-    this.modelSelect.disabled = false;
+    this.picker.setDisabled(false);
     this.viewer.setRestingView(IDLE_ELEVATION, Math.PI / 4);
   }
 
@@ -728,13 +710,6 @@ export class App {
     void this.generate();
   }
 
-  private chooseCategory(categoryId: string): void {
-    const models = getObjectsByCategory(categoryId);
-    if (!models.length) return;
-    const fallback = models.find((m) => m.id === this.state.objectId) ?? models[0];
-    this.chooseObject(fallback);
-  }
-
   private chooseTime(time: TimeOfDay): void {
     this.state.time = time;
     this.viewer.setTimeOfDay(time);
@@ -779,6 +754,7 @@ export class App {
 
   private onViewer(state: ViewerState): void {
     const scanning = state.mode === 'scan';
+    if (scanning) this.markGuideSeen();
     this.revealButton.innerHTML = `${scanning ? ICONS.cube : ICONS.reveal}<span>${scanning ? 'Show model' : 'Reveal QR'}</span>`;
     this.revealButton.setAttribute('aria-pressed', String(scanning));
     this.hint.textContent = state.renderer === 'canvas' && !scanning
@@ -789,6 +765,51 @@ export class App {
       this.embedButton.innerHTML = this.revealButton.innerHTML;
       if (scanning) this.embedHint.classList.add('hidden');
       this.postEmbed('state', state.mode, state.busy);
+    }
+  }
+
+  /** Collapsible configuration panel (phones): link + actions stay, options tuck away. */
+  private setDockCollapsed(collapsed: boolean): void {
+    this.root.classList.toggle('dock-collapsed', collapsed);
+    this.dockToggle.setAttribute('aria-expanded', String(!collapsed));
+    this.dockToggle.setAttribute('aria-label', collapsed ? 'Expand controls' : 'Collapse controls');
+    try {
+      window.localStorage.setItem('voxelqr.dock', collapsed ? 'closed' : 'open');
+    } catch {
+      /* storage unavailable (some embeds): session-only */
+    }
+    this.syncInsets();
+  }
+
+  private restoreDock(): void {
+    try {
+      if (window.localStorage.getItem('voxelqr.dock') === 'closed') {
+        this.root.classList.add('dock-collapsed');
+        this.dockToggle.setAttribute('aria-expanded', 'false');
+        this.dockToggle.setAttribute('aria-label', 'Expand controls');
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** First-run guide: remembered on-device, so the hint only ever shows until the first reveal. */
+  private markGuideSeen(): void {
+    if (this.root.classList.contains('seen')) return;
+    this.root.classList.add('seen');
+    try {
+      window.localStorage.setItem('voxelqr.seen', '1');
+    } catch {
+      /* storage unavailable (some embeds): session-only */
+    }
+    this.syncInsets();
+  }
+
+  private restoreGuideSeen(): void {
+    try {
+      if (window.localStorage.getItem('voxelqr.seen') === '1') this.root.classList.add('seen');
+    } catch {
+      /* ignore */
     }
   }
 
@@ -825,7 +846,8 @@ export class App {
       return;
     }
     // The hint wraps to two lines on the narrowest phones, so it needs more room above the dock there.
-    const hintRoom = window.innerWidth < 400 ? 84 : compact ? 64 : 76;
+    // Once the first-run guide is seen the hint is gone, so the stage reclaims that space.
+    const hintRoom = this.root.classList.contains('seen') ? 12 : window.innerWidth < 400 ? 84 : compact ? 64 : 76;
     this.viewer?.setInsets({ top: compact ? 64 : 72, bottom: dockHeight + hintRoom });
     this.root.style.setProperty('--dock-height', `${dockHeight}px`);
   }
@@ -919,7 +941,11 @@ export class App {
   private async save(kind: 'scan' | 'object'): Promise<void> {
     try {
       const blob = await this.viewer.exportImage(kind);
-      download(blob, kind === 'scan' ? 'voxel-qr-scan.png' : `voxel-qr-${this.state.objectId}.png`);
+      const filename = kind === 'scan' ? 'voxel-qr-scan.png' : `voxel-qr-${this.state.objectId}.png`;
+      if (isNative() && (await shareFileNative(blob, filename, 'My Voxel QR'))) {
+        return;
+      }
+      download(blob, filename);
       this.showToast('Image saved');
     } catch (error) {
       console.error(error);
@@ -1020,6 +1046,14 @@ export class App {
   private async share(): Promise<void> {
     this.syncUrl();
     const url = window.location.href;
+    if (isNative()) {
+      try {
+        await shareUrlNative(url, this.state.objectId === PHOTO_ID ? 'Voxel QR (photo not included)' : 'My Voxel QR');
+        return;
+      } catch {
+        /* fall through to clipboard */
+      }
+    }
     try {
       await navigator.clipboard.writeText(url);
       this.showToast(this.state.objectId === PHOTO_ID ? 'Link copied (photos are not included)' : 'Share link copied');
@@ -1047,12 +1081,16 @@ export class App {
 
   private onKey(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
+      if (this.picker.isOpen) {
+        this.picker.close(true);
+        return;
+      }
       this.closeMenu();
       this.closeScanOverlay();
       return;
     }
     const target = event.target as HTMLElement;
-    if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'text') return;
+    if (target.tagName === 'INPUT' && ['text', 'search', 'url'].includes((target as HTMLInputElement).type)) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === 'r' || event.key === 'R' || (event.key === ' ' && target.tagName !== 'BUTTON' && target.tagName !== 'LABEL')) {
       event.preventDefault();
