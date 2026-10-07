@@ -23,6 +23,14 @@ describe('embed options', () => {
     expect(parseEmbed('?embed=1&text=%20%20')!.text).toBeUndefined();
     expect(parseEmbed('?embed=1&text=' + 'x'.repeat(200))!.text).toBeUndefined();
   });
+
+  it('reads a photo from the hash, defaulting an unknown look to auto', () => {
+    expect(parseEmbed('?embed=1')!.photo).toBeUndefined();
+    const withPhoto = parseEmbed('?embed=1', '#img=QQ&mime=image%2Fjpeg&look=firm')!;
+    expect(withPhoto.photo).toEqual({ data: 'QQ', mime: 'image/jpeg', look: 'firm' });
+    expect(parseEmbed('?embed=1', '#img=QQ&mime=image%2Fjpeg&look=not-a-look')!.photo?.look).toBe('auto');
+    expect(parseEmbed('?embed=1', '#img=QQ')!.photo).toBeUndefined(); // no mime: not enough to decode
+  });
 });
 
 describe('embed snippet', () => {
@@ -44,6 +52,15 @@ describe('embed snippet', () => {
     expect(html).not.toMatch(/src="[^"]*&[^a]/);
     expect(html).toContain('loading="lazy"');
     expect(html).toContain('aspect-ratio:1/1');
+  });
+
+  it('carries a photo in the hash, never the query, and round-trips it through the parser', () => {
+    const photoSource = { ...source, objectId: 'photo' };
+    const url = embedUrl('https://qr.example.org/', photoSource, { photo: { data: 'QQ_-', mime: 'image/jpeg', look: 'max' } });
+    const parsed = new URL(url);
+    expect(parsed.search).not.toContain('img=');
+    expect(parsed.search).not.toContain('QQ_-');
+    expect(parseEmbed(parsed.search, parsed.hash)!.photo).toEqual({ data: 'QQ_-', mime: 'image/jpeg', look: 'max' });
   });
 });
 

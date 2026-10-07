@@ -7,8 +7,8 @@ import { Viewer, type ViewerState } from '../render/Viewer';
 import { buildModel } from '../voxel/buildModel';
 import { ICONS, LOGO } from './icons';
 import { IDLE_ELEVATION } from '../render/timeline';
-import { embedSnippet, embedUrl, parseCommand, parseEmbed, type EmbedEvent, type EmbedOptions } from './embed';
-import { PhotoReadError, PhotoSession } from './photoSession';
+import { embedSnippet, embedUrl, parseCommand, parseEmbed, type EmbedEvent, type EmbedOptions, type EmbedPhoto } from './embed';
+import { embedDataToFile, photoToEmbedData, PhotoReadError, PhotoSession } from './photoSession';
 import { BlockedImageError, fetchPhotoFile, parseImageUrl, proxiedUrl } from './photoUrl';
 import { readState, writeQuery, type AppState } from './state';
 import { decodeImage } from './verify';
@@ -96,7 +96,7 @@ export class App {
   private readonly saveMenu = el('div', 'menu');
   private readonly dock = el('section', 'dock');
   private readonly variantRow = el('div', 'variants');
-  private readonly embed: EmbedOptions | null = parseEmbed(window.location.search);
+  private readonly embed: EmbedOptions | null = parseEmbed(window.location.search, window.location.hash);
   private readonly embedBar = el('div', 'embed-controls');
   private readonly embedHint = el('p', 'embed-hint', 'Drag to rotate · tap to reveal the QR');
   private readonly embedButton = el('button', 'embed-btn');
@@ -125,6 +125,7 @@ export class App {
     if (this.embed) {
       if (this.embed.text) this.state.text = this.embed.text;
       if (!this.embed.timeGiven) this.state.time = 'day';
+      if (this.embed.photo) this.state.objectId = PHOTO_ID;
     } else if (!window.location.search && window.matchMedia?.('(prefers-color-scheme: light)').matches) {
       this.state.time = 'day';
     }
@@ -154,7 +155,30 @@ export class App {
     this.attachDrop();
     this.syncInsets();
     this.onViewer({ mode: 'object', busy: false, renderer: this.viewer.rendererKind });
-    void this.generate();
+    if (this.embed?.photo) void this.loadEmbedPhoto(this.embed.photo);
+    else void this.generate();
+  }
+
+  /** Decode a photo carried in an embed link's hash, then build the model the same way an upload would. */
+  private async loadEmbedPhoto(photo: EmbedPhoto): Promise<void> {
+    try {
+      await this.photo.load(embedDataToFile(photo));
+      this.look = photo.look;
+      const lookRadio = this.lookInputs.get(photo.look);
+      if (lookRadio) lookRadio.checked = true;
+      this.enterPhotoMode();
+    } catch (error) {
+      console.error(error);
+      // A corrupt or oversized hash must not strand the embed in photo mode with no chooser:
+      // fall back to the default object so something scannable still shows.
+      this.state.objectId = OBJECTS[0].id;
+      this.state.variantId = OBJECTS[0].variants[0].id;
+      this.photoRow.hidden = true;
+      this.variantRow.hidden = false;
+      this.setVerify('fail');
+      this.setStatus('Could not load the embedded photo.', true);
+    }
+    await this.generate();
   }
 
   // ---------- Structure ----------
@@ -932,13 +956,25 @@ export class App {
   }
 
   private async copyEmbed(): Promise<void> {
+    let photo: EmbedPhoto | undefined;
     if (this.state.objectId === PHOTO_ID) {
-      this.showToast('Photos cannot be embedded yet');
-      return;
+      if (!this.photo.square) {
+        this.showToast('Choose a photo before copying the embed code');
+        return;
+      }
+      try {
+        const { data, mime } = await photoToEmbedData(this.photo.square);
+        photo = { data, mime, look: this.look };
+      } catch (error) {
+        console.error(error);
+        this.showToast('Could not prepare the photo for embedding');
+        return;
+      }
     }
-    const src = embedUrl(window.location.href, this.state);
+    const src = embedUrl(window.location.href, this.state, photo ? { photo } : {});
     const html = embedSnippet(src);
-    this.showToast((await copyText(html)) ? 'Embed code copied' : 'Could not copy. Allow clipboard access and try again');
+    const copied = await copyText(html);
+    this.showToast(copied ? (photo ? 'Embed code copied (includes a small copy of your photo)' : 'Embed code copied') : 'Could not copy. Allow clipboard access and try again');
   }
 
   private saveSvg(): void {
