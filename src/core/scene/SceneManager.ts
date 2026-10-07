@@ -130,6 +130,17 @@ export class SceneManager {
     };
   }
 
+  private scanRestore: (() => void) | null = null;
+
+  /** Persistent scan lighting for the main view (phone-scannable top view). */
+  setScanMode(on: boolean): void {
+    if (on && !this.scanRestore) this.scanRestore = this.verificationLighting();
+    else if (!on && this.scanRestore) {
+      this.scanRestore();
+      this.scanRestore = null;
+    }
+  }
+
   /** Flat high-contrast lighting for QR decoding. Returns a restore fn. Geometry untouched. */
   verificationLighting(): () => void {
     const prev = {

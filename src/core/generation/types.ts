@@ -27,9 +27,9 @@ export const QUALITY_BUDGET: Record<
   QualityLevel,
   { branchDepth: number; canopy: number; blossom: number; grass: number; shadow: number; pixelRatio: number }
 > = {
-  preview: { branchDepth: 3, canopy: 1200, blossom: 500, grass: 800, shadow: 1024, pixelRatio: 1 },
-  high: { branchDepth: 3, canopy: 3000, blossom: 1200, grass: 2000, shadow: 2048, pixelRatio: 1.25 },
-  cinematic: { branchDepth: 4, canopy: 6000, blossom: 2500, grass: 4500, shadow: 2048, pixelRatio: 2 },
+  preview: { branchDepth: 3, canopy: 900, blossom: 350, grass: 600, shadow: 1024, pixelRatio: 1 },
+  high: { branchDepth: 3, canopy: 1800, blossom: 700, grass: 1200, shadow: 2048, pixelRatio: 1.25 },
+  cinematic: { branchDepth: 4, canopy: 3500, blossom: 1500, grass: 2500, shadow: 2048, pixelRatio: 2 },
 };
 
 export function qualityMultiplier(q: QualityLevel): number {
@@ -42,7 +42,7 @@ export function defaultParams(partial: Partial<GeneratorParams> = {}): Generator
     density: 0.85,
     height: 0.8,
     variation: 0.55,
-    qrStrength: 0.85,
+    qrStrength: 0.9,
     flowerDensity: 0.8,
     foliageDensity: 0.9,
     sceneScale: 1,

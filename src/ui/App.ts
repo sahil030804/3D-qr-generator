@@ -49,7 +49,7 @@ export class App {
   private generating = false;
   private params: GeneratorParams = {
     seed: 20260707, density: 0.85, height: 0.8, variation: 0.55,
-    qrStrength: 0.85, flowerDensity: 0.8, foliageDensity: 0.9, sceneScale: 1, quality: 'high',
+    qrStrength: 0.9, flowerDensity: 0.8, foliageDensity: 0.9, sceneScale: 1, quality: 'high',
   };
   private presetId = 'cherry-blossom';
   private content = 'https://example.com/hidden-garden';
@@ -354,7 +354,7 @@ export class App {
       this.current = verified;
       const ok = verified.result.success && verified.result.data === verified.content;
       this.setBadge(ok ? 'ok' : 'fail', ok ? `✓ QR Verified · ${verified.attempts} attempt${verified.attempts > 1 ? 's' : ''}` : '✗ Not decodable — try stronger QR strength');
-      if (!ok) this.toast('Top-down decode failed after 8 attempts. Raise QR strength / density, or shorten the content.');
+      if (!ok) this.toast('Top-down decode failed after 4 attempts. Raise QR strength / density, or shorten the content.');
       // debug views
       verified.field.drawToCanvas(this.debugCanvasMatrix, 5);
       verified.field.drawFieldToCanvas(this.debugCanvasField, 140);
@@ -413,17 +413,20 @@ export class App {
   }
 
   reveal(): void {
+    this.manager.setScanMode(true);
     this.manager.flyTo(this.manager.topPose(this.worldSize()), 2.4, () => {
-      if (this.current?.result.success) this.setBadge('ok', '✓ QR Verified — top view');
+      if (this.current?.result.success) this.setBadge('ok', '✓ QR Verified — point your phone at the screen');
     });
-    this.toast('Gliding overhead — watch the canopy resolve into the code.');
+    this.toast('Scan lighting on — the code on screen is phone-scannable.');
   }
 
   toTop(): void {
+    this.manager.setScanMode(true);
     this.manager.flyTo(this.manager.topPose(this.worldSize()), 1.4);
   }
 
   toPerspective(): void {
+    this.manager.setScanMode(false);
     this.manager.flyTo(this.manager.cinematicPose(this.worldSize()), 1.4);
   }
 

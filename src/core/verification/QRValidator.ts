@@ -43,7 +43,7 @@ export async function generateVerifiedScene(
   const { content, presetId } = opts;
   const preset = getPreset(presetId);
   const qr = generateQRMatrix(content);
-  const maxAttempts = Math.min(10, opts.maxAttempts ?? 8);
+  const maxAttempts = Math.min(4, opts.maxAttempts ?? 4);
   const top = new TopDownRenderer(renderer);
   const t0 = performance.now();
   let group: THREE.Group | null = null;
@@ -54,7 +54,7 @@ export async function generateVerifiedScene(
     const boost = attempt; // 0 = user settings, then progressively stronger
     const params: GeneratorParams = {
       ...defaultParams(opts.params),
-      qrStrength: Math.min(1, (opts.params.qrStrength ?? 0.85) + boost * 0.04),
+      qrStrength: Math.min(1, (opts.params.qrStrength ?? 0.9) + boost * 0.04),
       density: Math.min(1.2, (opts.params.density ?? 0.85) + boost * 0.04),
       foliageDensity: Math.min(1.2, (opts.params.foliageDensity ?? 0.9) + boost * 0.03),
       variation: Math.max(0.15, (opts.params.variation ?? 0.55) - boost * 0.06),
@@ -78,7 +78,7 @@ export async function generateVerifiedScene(
         ? `attempt 1 · baseline (strength ${params.qrStrength.toFixed(2)})`
         : `attempt ${attempt + 1} · strength ${params.qrStrength.toFixed(2)}, density ${params.density.toFixed(2)}, seed ${params.seed}`;
     cb.onAttempt?.(attempt + 1, note);
-    const result = top.render(scene, worldSize, opts.resolution ?? 1024, opts.lighting, field);
+    const result = top.render(scene, worldSize, opts.resolution ?? 512, opts.lighting, field);
     lastResult = result;
     if (result.success && result.data === qr.content) {
       return { group, field, content: qr.content, params, attempts: attempt + 1, result, generationMs: performance.now() - t0 };

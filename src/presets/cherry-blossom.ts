@@ -26,7 +26,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
   name: 'Cherry Blossom',
   icon: '🌸',
   description: 'Cinematic sakura tree with a hidden canopy QR',
-  qrWorldSize: 30,
+  qrWorldSize: 38,
 
   generate(ctx: SceneGenerationContext): THREE.Group {
     const { field, rng, params, worldSize } = ctx;
@@ -36,7 +36,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
     const group = new THREE.Group();
     group.name = 'cherry-blossom';
 
-    const H = 9 * params.height + 3; // canopy height
+    const H = 11 * params.height + 4; // canopy height
     const warpFn = (u: number, v: number): [number, number] => [
       noise.fbm(u * 6 + 3.1, v * 6, 3),
       noise.fbm(u * 6, v * 6 + 7.7, 3),
@@ -164,8 +164,10 @@ export const cherryBlossomPreset: NaturalScenePreset = {
 
     // ---------- canopy: dense dark foliage where QR is dark ----------
     // Candidate-based placement (NOT fill-to-target): light modules stay open.
-    const canopyMax = Math.round(budget.canopy * params.density * params.foliageDensity);
-    const blobDetail = params.quality === 'cinematic' ? 1 : 0;
+    // Counts scale with QR area so per-module density stays constant.
+    const areaK = (S / 30) * (S / 30);
+    const canopyMax = Math.round(budget.canopy * areaK * params.density * params.foliageDensity);
+    const blobDetail = 0;
     const blobGeoA = makeFoliageBlobGeometry(rng, blobDetail);
     const blobGeoB = makeFoliageBlobGeometry(rng, blobDetail);
     const leafMat = new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0, flatShading: true });
@@ -188,7 +190,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
       const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
       return t * t * (3 - 2 * t);
     };
-    const candidates = canopyMax * 3;
+    const candidates = Math.round(canopyMax * 3 * areaK);
     for (let i = 0; i < candidates && ia + ib < canopyMax; i++) {
       // uniform over the QR square with a noisy ragged rim (covers corner finders)
       const x = trunkBase.x + rng.range(-0.5, 0.5) * S * 0.98;
@@ -207,7 +209,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
       e.set(rng.range(0, Math.PI), rng.range(0, Math.PI * 2), rng.range(0, Math.PI));
       q.setFromEuler(e);
       // small footprints: a blob must not swallow neighboring light modules
-      const s = rng.range(0.28, 0.5) * (0.7 + params.density * 0.5);
+      const s = rng.range(0.25, 0.45) * (0.7 + params.density * 0.5);
       sc.set(s * rng.range(0.9, 1.5), s * rng.range(0.7, 1), s * rng.range(0.9, 1.5));
       m.compose(pv, q, sc);
       // darker instances in dark modules -> stronger top-down contrast
@@ -235,7 +237,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
       emissiveIntensity: 0.25,
       side: THREE.DoubleSide,
     });
-    const blossomTarget = Math.round(budget.blossom * params.density * params.flowerDensity);
+    const blossomTarget = Math.round(budget.blossom * areaK * params.density * params.flowerDensity);
     const blossoms = new THREE.InstancedMesh(blossomGeo, blossomMat, Math.max(8, blossomTarget * 2));
     const pink = new THREE.Color('#f6cdd8');
     const deepPink = new THREE.Color('#ef9db4');
@@ -257,7 +259,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
     // clusters around twig tips (natural), thinned where QR is dark
     for (const tip of twigTips) {
       const f = at(tip.pos.x, tip.pos.z);
-      const keep = Math.pow(1 - f, 1.4) * 0.7 + 0.02;
+      const keep = Math.pow(1 - f, 1.6) * 0.6 + 0.01;
       if (rng.next() > keep * params.flowerDensity + 0.02) continue;
       const n = rng.int(3, 7);
       for (let k = 0; k < n && bi < blossoms.count; k++) {
@@ -287,9 +289,10 @@ export const cherryBlossomPreset: NaturalScenePreset = {
     // ---------- fallen petals on ground (brighten light modules) ----------
     const petalGeo = new THREE.CircleGeometry(0.09, 6);
     const petalMat = new THREE.MeshStandardMaterial({ color: '#f4c3d2', roughness: 0.8, side: THREE.DoubleSide });
-    const fallen = new THREE.InstancedMesh(petalGeo, petalMat, 900);
+    const fallenMax = Math.round(900 * areaK);
+    const fallen = new THREE.InstancedMesh(petalGeo, petalMat, fallenMax);
     let fi = 0;
-    for (let i = 0; i < 4000 && fi < 900; i++) {
+    for (let i = 0; i < fallenMax * 4 + 400 && fi < fallenMax; i++) {
       const x = rng.range(-S / 2, S / 2);
       const z = rng.range(-S / 2, S / 2);
       const f = at(x, z);
