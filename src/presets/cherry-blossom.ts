@@ -209,7 +209,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
       e.set(rng.range(0, Math.PI), rng.range(0, Math.PI * 2), rng.range(0, Math.PI));
       q.setFromEuler(e);
       // small footprints: a blob must not swallow neighboring light modules
-      const s = rng.range(0.25, 0.45) * (0.7 + params.density * 0.5);
+      const s = rng.range(0.3, 0.55) * (0.7 + params.density * 0.5);
       sc.set(s * rng.range(0.9, 1.5), s * rng.range(0.7, 1), s * rng.range(0.9, 1.5));
       m.compose(pv, q, sc);
       // darker instances in dark modules -> stronger top-down contrast
@@ -263,9 +263,10 @@ export const cherryBlossomPreset: NaturalScenePreset = {
       if (rng.next() > keep * params.flowerDensity + 0.02) continue;
       const n = rng.int(3, 7);
       for (let k = 0; k < n && bi < blossoms.count; k++) {
+        // hang blossoms just under the canopy top so the top projection stays clean
         placeFlower(
           tip.pos.x + rng.gaussian(0, 0.45),
-          tip.pos.y + rng.gaussian(0, 0.35),
+          tip.pos.y * 0.82 + rng.gaussian(0, 0.3),
           tip.pos.z + rng.gaussian(0, 0.45),
           rng.range(0.5, 0.95),
         );
@@ -280,7 +281,7 @@ export const cherryBlossomPreset: NaturalScenePreset = {
       const z = trunkBase.z + Math.sin(a) * r;
       const f = at(x, z);
       if (rng.next() > (1 - f) * 0.5 * params.flowerDensity) continue;
-      placeFlower(x, H * rng.range(0.6, 1.05) + rng.gaussian(0, 0.5), z, rng.range(0.45, 0.8));
+      placeFlower(x, H * rng.range(0.5, 0.85) + rng.gaussian(0, 0.4), z, rng.range(0.45, 0.8));
     }
     blossoms.count = bi;
     blossoms.castShadow = true;

@@ -149,7 +149,7 @@ export const cherryBlossomPreset = {
         // Counts scale with QR area so per-module density stays constant.
         const areaK = (S / 30) * (S / 30);
         const canopyMax = Math.round(budget.canopy * areaK * params.density * params.foliageDensity);
-        const blobDetail = params.quality === 'cinematic' ? 1 : 0;
+        const blobDetail = 0;
         const blobGeoA = makeFoliageBlobGeometry(rng, blobDetail);
         const blobGeoB = makeFoliageBlobGeometry(rng, blobDetail);
         const leafMat = new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0, flatShading: true });
@@ -244,7 +244,7 @@ export const cherryBlossomPreset = {
         // clusters around twig tips (natural), thinned where QR is dark
         for (const tip of twigTips) {
             const f = at(tip.pos.x, tip.pos.z);
-            const keep = Math.pow(1 - f, 1.4) * 0.7 + 0.02;
+            const keep = Math.pow(1 - f, 1.6) * 0.6 + 0.01;
             if (rng.next() > keep * params.flowerDensity + 0.02)
                 continue;
             const n = rng.int(3, 7);

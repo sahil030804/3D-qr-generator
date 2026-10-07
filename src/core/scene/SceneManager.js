@@ -12,6 +12,7 @@ export class SceneManager {
         this.animId = 0;
         this.camTween = null;
         this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+        this.scanRestore = null;
         this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -107,6 +108,15 @@ export class SceneManager {
             dur,
             onDone,
         };
+    }
+    /** Persistent scan lighting for the main view (phone-scannable top view). */
+    setScanMode(on) {
+        if (on && !this.scanRestore)
+            this.scanRestore = this.verificationLighting();
+        else if (!on && this.scanRestore) {
+            this.scanRestore();
+            this.scanRestore = null;
+        }
     }
     /** Flat high-contrast lighting for QR decoding. Returns a restore fn. Geometry untouched. */
     verificationLighting() {

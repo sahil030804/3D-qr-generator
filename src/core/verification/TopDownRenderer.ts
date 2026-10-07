@@ -80,13 +80,24 @@ export class TopDownRenderer {
           0.25;
       }
     }
+    // quarter-res: one value per ~module neighborhood, kills fine speckle
+    const quarter = resolution >> 2;
+    const tiny = new Float32Array(quarter * quarter);
+    for (let y = 0; y < quarter; y++) {
+      for (let x = 0; x < halfRes; x += 2) {
+        const yy = y * 2;
+        tiny[y * quarter + (x >> 1)] =
+          (small[yy * halfRes + x] + small[yy * halfRes + x + 1] + small[(yy + 1) * halfRes + x] + small[(yy + 1) * halfRes + x + 1]) * 0.25;
+      }
+    }
     const variants: { w: number; img: ImageData }[] = [
       { w: resolution, img: binarize(gray, resolution, otsu(gray)) },
-      { w: resolution, img: binarize(gray, resolution, otsu(gray) - 18) },
-      { w: resolution, img: binarize(gray, resolution, otsu(gray) + 18) },
+      { w: resolution, img: binarize(boxBlur(gray, resolution), resolution, otsu(gray)) },
       { w: resolution, img: adaptiveBinarize(gray, resolution) },
       { w: halfRes, img: binarize(small, halfRes, otsu(small)) },
       { w: halfRes, img: binarize(small, halfRes, otsu(small) - 14) },
+      { w: quarter, img: binarize(tiny, quarter, otsu(tiny)) },
+      { w: quarter, img: adaptiveBinarize(tiny, quarter) },
     ];
     let data: string | null = null;
     let used = variants[0].img;
@@ -134,6 +145,24 @@ function toGrayscale(img: ImageData): Float32Array {
   const span = Math.max(1, hi - lo);
   for (let i = 0; i < g.length; i++) g[i] = Math.min(255, Math.max(0, ((g[i] - lo) / span) * 255));
   return g;
+}
+
+function boxBlur(g: Float32Array, size: number): Float32Array {
+  const out = new Float32Array(g.length);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      let sum = 0;
+      let n = 0;
+      for (let yy = Math.max(0, y - 1); yy <= Math.min(size - 1, y + 1); yy++) {
+        for (let xx = Math.max(0, x - 1); xx <= Math.min(size - 1, x + 1); xx++) {
+          sum += g[yy * size + xx];
+          n++;
+        }
+      }
+      out[y * size + x] = sum / n;
+    }
+  }
+  return out;
 }
 
 function otsu(g: Float32Array): number {
