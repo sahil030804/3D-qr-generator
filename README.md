@@ -1,6 +1,6 @@
 # Voxel QR
 
-A 3D QR code generator that runs entirely in the browser. Paste a link and get a detailed voxel model (cherry tree, pine tree or sports car) standing on a tiled plot. Tap it: the camera lifts overhead, the lighting flattens and the model's own colors resolve into a QR code you can scan straight off the screen.
+A 3D QR code generator that runs entirely in the browser. Paste a link and pick a design from 8 categories (IT, Medical, Education, Nature, Vehicles, Business, Food, Sports — 36 voxel models) standing on a tiled plot. Tap it: the camera lifts overhead, the lighting flattens and the model's own colors resolve into a QR code you can scan straight off the screen.
 
 ## Run
 

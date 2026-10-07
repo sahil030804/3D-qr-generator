@@ -8,6 +8,7 @@
 }
 
 .app[data-tone='dark'] {
+  color-scheme: dark;
   --fg: #eef1fb;
   --muted: rgba(238, 241, 251, 0.64);
   --glass: rgba(15, 20, 35, 0.62);
@@ -23,6 +24,7 @@
 }
 
 .app[data-tone='light'] {
+  color-scheme: light;
   --fg: #151b2c;
   --muted: rgba(21, 27, 44, 0.62);
   --glass: rgba(255, 255, 255, 0.68);
@@ -41,7 +43,7 @@
 html, body { height: 100%; margin: 0; overflow: hidden; background: #070a12; overscroll-behavior: none; }
 body { font-family: var(--font); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
 h1, h2, p { margin: 0; }
-button, input { font: inherit; color: inherit; }
+button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; touch-action: manipulation; }
 [hidden] { display: none !important; }
 :focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
@@ -198,6 +200,26 @@ button { cursor: pointer; touch-action: manipulation; }
 .pill input:checked + .pill-label { background: var(--glass-strong); color: var(--fg); box-shadow: 0 1px 6px rgba(0, 0, 0, 0.18); }
 .pill input:focus-visible + .pill-label { outline: 3px solid var(--ring); outline-offset: 1px; }
 
+.pickers { display: flex; gap: 8px; align-items: end; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; }
+.picker-label { display: grid; gap: 4px; font-size: 0.7rem; font-weight: 650; letter-spacing: 0.02em; text-transform: uppercase; color: var(--muted); }
+.picker {
+  height: 42px; max-width: 190px; padding: 0 32px 0 12px; border: 1px solid var(--glass-border); border-radius: var(--radius);
+  background-color: var(--field); color: var(--fg); font-size: 0.85rem; font-weight: 600; cursor: pointer;
+  appearance: none; -webkit-appearance: none;
+  background-repeat: no-repeat; background-position: right 10px center; background-size: 12px;
+  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+}
+.app[data-tone='dark'] .picker {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23eef1fb' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+.app[data-tone='light'] .picker {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23151b2c' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+.picker:hover { background-color: var(--hover); }
+.picker:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+.picker:disabled { opacity: 0.5; cursor: not-allowed; }
+.picker option { background-color: var(--menu-bg); color: var(--fg); font-weight: 600; }
+
 .variants { display: flex; gap: 8px; align-items: center; padding: 0 4px; }
 .swatch { position: relative; cursor: pointer; display: inline-grid; place-items: center; width: 26px; height: 26px; }
 .swatch-dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid transparent; box-shadow: 0 0 0 1px var(--glass-border) inset, 0 2px 6px rgba(0, 0, 0, 0.25); transition: transform 0.15s var(--ease), box-shadow 0.15s; }
@@ -266,6 +288,9 @@ button { cursor: pointer; touch-action: manipulation; }
   .link-row > .btn { flex: 2; }
   .options-row { gap: 8px; }
   .pills { flex: 1 1 100%; }
+  .pickers { flex: 1 1 100%; }
+  .picker { flex: 1; max-width: none; }
+  .picker-label { flex: 1; min-width: 130px; }
   .pill { flex: 1; text-align: center; }
   .pill-label { padding: 8px 4px; font-size: 0.74rem; white-space: nowrap; }
   .pill-label svg { display: none; }

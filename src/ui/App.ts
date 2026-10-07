@@ -1,6 +1,6 @@
 import { generateQRMatrix, MAX_QR_CHARS, QRInputError, type QRData } from '../core/qr/QRGenerator';
 import { qrToSvg } from '../core/qr/qrSvg';
-import { getObject, OBJECTS, type VoxelObject } from '../objects';
+import { getObject, OBJECTS, getCategories, getObjectsByCategory, getCategoryForObject, type VoxelObject } from '../objects';
 import { LIGHTING, TIMES_OF_DAY, type TimeOfDay } from '../render/lighting';
 import { buildMesh } from '../render/mesher';
 import { Viewer, type ViewerState } from '../render/Viewer';
@@ -117,7 +117,9 @@ export class App {
   private look: LookChoice = 'auto';
   /** The built-in object to restore (and to write into share links) while photo mode is active. */
   private regular = { objectId: OBJECTS[0].id, variantId: OBJECTS[0].variants[0].id };
-  private readonly objectInputs = new Map<string, HTMLInputElement>();
+  private readonly categorySelect = el('select', 'picker');
+  private readonly modelSelect = el('select', 'picker');
+  private readonly photoButton = el('button', 'btn ghost small');
   private readonly timeInputs = new Map<TimeOfDay, HTMLInputElement>();
 
   constructor(private readonly root: HTMLElement) {
@@ -173,8 +175,13 @@ export class App {
       // fall back to the default object so something scannable still shows.
       this.state.objectId = OBJECTS[0].id;
       this.state.variantId = OBJECTS[0].variants[0].id;
+      this.regular = { objectId: this.state.objectId, variantId: this.state.variantId };
       this.photoRow.hidden = true;
       this.variantRow.hidden = false;
+      this.categorySelect.disabled = false;
+      this.modelSelect.disabled = false;
+      this.syncObjectPickers();
+      this.renderVariants();
       this.setVerify('fail');
       this.setStatus('Could not load the embedded photo.', true);
     }
@@ -288,34 +295,35 @@ export class App {
     saveWrap.append(this.saveButton, this.saveMenu);
     row1.append(field, saveWrap, this.revealButton);
 
-    // Row 2: object, color, time of day.
+    // Row 2: category, model, photo, color, time of day.
     const row2 = el('div', 'row options-row');
-    const objects = el('div', 'pills');
-    objects.setAttribute('role', 'radiogroup');
-    objects.setAttribute('aria-label', 'Object');
-    for (const object of OBJECTS) {
-      const label = el('label', 'pill');
-      const radio = el('input', 'sr-only');
-      radio.type = 'radio';
-      radio.name = 'object';
-      radio.value = object.id;
-      radio.checked = object.id === this.state.objectId;
-      radio.addEventListener('change', () => this.chooseObject(object));
-      this.objectInputs.set(object.id, radio);
-      label.append(radio, el('span', 'pill-label', object.name));
-      objects.append(label);
+    const pickers = el('div', 'pickers');
+    const categoryLabel = el('label', 'picker-label', 'Category');
+    this.categorySelect.setAttribute('aria-label', 'Category');
+    for (const category of getCategories()) {
+      const option = document.createElement('option');
+      option.value = category.id;
+      option.textContent = category.name;
+      this.categorySelect.append(option);
     }
-    const photoPill = el('label', 'pill');
-    const photoRadio = el('input', 'sr-only');
-    photoRadio.type = 'radio';
-    photoRadio.name = 'object';
-    photoRadio.value = PHOTO_ID;
-    photoRadio.addEventListener('change', () => this.choosePhoto());
-    this.objectInputs.set(PHOTO_ID, photoRadio);
-    const photoLabel = el('span', 'pill-label');
-    photoLabel.innerHTML = `${ICONS.photo}<span>Your photo</span>`;
-    photoPill.append(photoRadio, photoLabel);
-    objects.append(photoPill);
+    this.categorySelect.addEventListener('change', () => this.chooseCategory(this.categorySelect.value));
+    categoryLabel.append(this.categorySelect);
+    const modelLabel = el('label', 'picker-label', 'Design');
+    this.modelSelect.setAttribute('aria-label', 'Design');
+    this.modelSelect.addEventListener('change', () => {
+      const object = getObject(this.modelSelect.value);
+      this.chooseObject(object);
+    });
+    modelLabel.append(this.modelSelect);
+    pickers.append(categoryLabel, modelLabel);
+
+    this.photoButton.type = 'button';
+    this.photoButton.innerHTML = `${ICONS.photo}<span>Your photo</span>`;
+    this.photoButton.setAttribute('aria-label', 'Use your own photo');
+    this.photoButton.title = 'Use your own photo';
+    this.photoButton.addEventListener('click', () => this.choosePhoto());
+    pickers.append(this.photoButton);
+    this.syncObjectPickers();
 
     this.fileInput.type = 'file';
     this.fileInput.accept = 'image/*';
@@ -326,7 +334,7 @@ export class App {
       this.fileInput.value = '';
       if (file) void this.loadPhoto(file);
     });
-    this.fileInput.addEventListener('cancel', () => this.restoreObjectRadio());
+    this.fileInput.addEventListener('cancel', () => this.restoreObjectSelect());
     this.buildPhotoRow();
 
     this.variantRow.setAttribute('role', 'radiogroup');
@@ -351,7 +359,7 @@ export class App {
       label.append(radio, icon, el('span', 'segment-text', TIME_LABELS[time]));
       times.append(label);
     }
-    row2.append(objects, this.variantRow, this.photoRow, times, this.fileInput);
+    row2.append(pickers, this.variantRow, this.photoRow, times, this.fileInput);
 
     this.status.setAttribute('role', 'status');
     this.status.setAttribute('aria-live', 'polite');
@@ -380,7 +388,7 @@ export class App {
     const steps = el('ol', 'info-steps');
     const copy: [string, string][] = [
       ['Paste a link', `Anything up to ${MAX_QR_CHARS} characters. The code uses the highest error correction.`],
-      ['Meet your model', 'Pick an object, color and time of day. The code is laid into the ground tiles and grows through the model\'s surfaces.'],
+      ['Meet your model', 'Pick a category and design, color and time of day. The code is laid into the ground tiles and grows through the model\'s surfaces.'],
       ['Tap to reveal', 'The camera lifts overhead, the lighting flattens and the model\'s own colors resolve into the code. Scan it straight off the screen.'],
       ['Or use your own photo', 'Choose Your photo, then upload one, paste a public image link, or drop an image anywhere. It becomes an embossed 3D relief whose colors resolve into a scannable code, tuned automatically so it still reads.'],
       ['Check and share', 'We decode the rendered image in your browser and show a verified badge. Save a PNG or a print-ready SVG, or copy a share link.'],
@@ -510,7 +518,7 @@ export class App {
       if (event.target === dialog) dialog.close();
     });
     dialog.addEventListener('close', () => {
-      if (!chosen) this.restoreObjectRadio();
+      if (!chosen) this.restoreObjectSelect();
       chosen = false;
     });
     return dialog;
@@ -551,7 +559,7 @@ export class App {
   private choosePhoto(): void {
     if (this.viewer.rendererKind === 'canvas') {
       this.showToast('Photos need WebGL 2, which this device does not support');
-      this.restoreObjectRadio();
+      this.restoreObjectSelect();
       return;
     }
     if (this.photo.ready) {
@@ -563,9 +571,25 @@ export class App {
   }
 
   /** The user dismissed the file dialog: put the selection back on the object that is showing. */
-  private restoreObjectRadio(): void {
-    const radio = this.objectInputs.get(this.state.objectId);
-    if (radio) radio.checked = true;
+  private restoreObjectSelect(): void {
+    this.syncObjectPickers();
+  }
+
+  /** Rebuild the design dropdown for a category and keep the selection valid. */
+  private syncObjectPickers(): void {
+    const currentId = this.state.objectId === PHOTO_ID ? this.regular.objectId : this.state.objectId;
+    const current = getObject(currentId);
+    if (!this.categorySelect.options.length) return;
+    this.categorySelect.value = current.category;
+    const models = getObjectsByCategory(current.category);
+    this.modelSelect.replaceChildren();
+    for (const object of models) {
+      const option = document.createElement('option');
+      option.value = object.id;
+      option.textContent = object.name;
+      this.modelSelect.append(option);
+    }
+    this.modelSelect.value = current.id;
   }
 
   private async loadPhoto(file: File): Promise<void> {
@@ -580,7 +604,7 @@ export class App {
     } catch (error) {
       this.loading.hidden = true;
       this.showToast(error instanceof PhotoReadError ? error.message : 'Could not read that image');
-      this.restoreObjectRadio();
+      this.restoreObjectSelect();
       return;
     }
     this.photoName.textContent = file.name;
@@ -591,8 +615,8 @@ export class App {
 
   private enterPhotoMode(): void {
     this.state.objectId = PHOTO_ID;
-    const radio = this.objectInputs.get(PHOTO_ID);
-    if (radio) radio.checked = true;
+    this.categorySelect.disabled = true;
+    this.modelSelect.disabled = true;
     this.variantRow.hidden = true;
     this.photoRow.hidden = false;
     this.viewer.setRestingView(0.95, 0.12);
@@ -602,6 +626,8 @@ export class App {
     if (this.state.objectId !== PHOTO_ID) return;
     this.photoRow.hidden = true;
     this.variantRow.hidden = false;
+    this.categorySelect.disabled = false;
+    this.modelSelect.disabled = false;
     this.viewer.setRestingView(IDLE_ELEVATION, Math.PI / 4);
   }
 
@@ -697,8 +723,16 @@ export class App {
     this.state.objectId = object.id;
     this.state.variantId = object.variants[0].id;
     this.regular = { objectId: object.id, variantId: object.variants[0].id };
+    this.syncObjectPickers();
     this.renderVariants();
     void this.generate();
+  }
+
+  private chooseCategory(categoryId: string): void {
+    const models = getObjectsByCategory(categoryId);
+    if (!models.length) return;
+    const fallback = models.find((m) => m.id === this.state.objectId) ?? models[0];
+    this.chooseObject(fallback);
   }
 
   private chooseTime(time: TimeOfDay): void {

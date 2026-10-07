@@ -16,7 +16,9 @@ export interface GroundTheme {
 
 /** Register the plot families on a palette and return their ids. */
 export function addGroundFamilies(palette: Palette, theme: GroundTheme): GroundFamilies {
-  const stone = theme.stone ?? ['#6a665f', '#a39d92', '#d9d3c7'];
+  // Stone dark must stay near tile-dark luminance (~45): plinths and rims are wide flat
+  // tops, and a pale "dark" module (old #6a665f ≈ 102) corrupts the code beyond ECC.
+  const stone = theme.stone ?? ['#33302c', '#a39d92', '#d9d3c7'];
   return {
     tileA: palette.addFamily('tileA', ...theme.tileA),
     tileB: palette.addFamily('tileB', ...theme.tileB),

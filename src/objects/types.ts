@@ -29,6 +29,8 @@ export interface VoxelObject {
   id: string;
   name: string;
   description: string;
+  /** Category id from `src/objects/categories.ts`; drives the category → model dropdowns. */
+  category: string;
   variants: ObjectVariant[];
   createPalette(variantId: string): PaletteSet;
   /** Add the object and its decorations above the plot surface. */
