@@ -87,7 +87,7 @@ export const forestPreset: NaturalScenePreset = {
     }
     const spots: { x: number; z: number; s: number; kind: number; age: number }[] = [];
     // Candidate-capped: light modules stay open instead of filling to target.
-    for (let g = 0; g < treeTarget * 2.5 && spots.length < treeTarget; g++) {
+    for (let g = 0; g < treeTarget * 2 && spots.length < treeTarget; g++) {
       const x = rng.range(-S / 2, S / 2);
       const z = rng.range(-S / 2, S / 2);
       let cluster = 0.25;
@@ -117,9 +117,9 @@ export const forestPreset: NaturalScenePreset = {
     trunkGeo.translate(0, 1.7, 0);
     const trunkMat = new THREE.MeshStandardMaterial({ color: '#4c3a28', roughness: 0.95 });
     const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, Math.max(1, spots.length));
-    const coneGeo = new THREE.ConeGeometry(1.5, 3.2, 8);
+    const coneGeo = new THREE.ConeGeometry(0.85, 2.6, 8);
     coneGeo.translate(0, 1.2, 0);
-    const blobGeo = new THREE.IcosahedronGeometry(1.5, 1);
+    const blobGeo = new THREE.IcosahedronGeometry(0.95, 1);
     blobGeo.translate(0, 0.6, 0);
     const coniferMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9, flatShading: true });
     const broadMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9, flatShading: true });
@@ -144,11 +144,11 @@ export const forestPreset: NaturalScenePreset = {
       ee.set(0, rng.range(0, Math.PI * 2), rng.range(-0.04, 0.04));
       qq.setFromEuler(ee);
       vv.set(s.x, y, s.z);
-      ss.set(s.s, hgt / 3.4, s.s);
+      ss.set(s.s, (hgt / 3.4) * (0.45 + 0.55 * f), s.s);
       m.compose(vv, qq, ss);
       trunks.setMatrixAt(ti++, m);
       vv.y = y + hgt * 0.55;
-      const w = s.s * rng.range(0.85, 1.3);
+      const w = s.s * rng.range(0.85, 1.3) * (0.4 + 0.6 * f);
       ss.set(w, (0.7 + s.age * 0.7) * s.s, w);
       m.compose(vv, qq, ss);
       cc.copy(deepG).lerp(s.kind < 0.45 ? pineG : leafG, rng.range(0.2, 0.7) + (1 - f) * 0.2);
