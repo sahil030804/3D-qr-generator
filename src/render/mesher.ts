@@ -11,6 +11,18 @@ export const FLAG_GROUND = 128;
 export const FLAG_EMISSIVE = 64;
 export const FLAG_RANDOM_MASK = 15;
 
+/** What the mesher needs from a model (photo models have no object definition). */
+export type MeshInput = Pick<VoxelModel, 'grid' | 'palette' | 'layout' | 'fit'>;
+
+export interface MeshOptions {
+  /** Treat every voxel as plot: gentle color jitter and a bottom-up build-in. Used for photo reliefs. */
+  allPlot?: boolean;
+  /** 0..1: how much terrace sides are shaded like gentle slopes instead of cliffs (hides contour lines). */
+  soften?: number;
+  /** Bake sun shadows (default true). Reliefs carry their own baked lighting and skip this. */
+  shadows?: boolean;
+}
+
 export interface Mesh {
   vertices: ArrayBuffer;
   vertexCount: number;
@@ -18,6 +30,8 @@ export interface Mesh {
   indices: Uint32Array;
   faceCount: number;
   bounds: SceneBounds;
+  /** See MeshOptions.soften. */
+  soften: number;
 }
 
 /** Normal index -> [axis, sign]. Order must match the normal table in the shader. */
@@ -58,8 +72,10 @@ function shadowAt(grid: VoxelGrid, x: number, y: number, z: number, normal: [num
  * baked sun shadow and small per-voxel color jitter. Faces carry flags for the shader: plot (ground),
  * emissive and a per-voxel random number.
  */
-export function buildMesh(model: VoxelModel): Mesh {
+export function buildMesh(model: MeshInput, options: MeshOptions = {}): Mesh {
   const { grid, palette, layout } = model;
+  const allPlot = options.allPlot ?? false;
+  const bakeShadows = options.shadows ?? true;
   const { width, height, depth } = grid;
   const dirs = FACES.map(([axis, sign]) => {
     const d = [0, 0, 0];
@@ -97,7 +113,7 @@ export function buildMesh(model: VoxelModel): Mesh {
         const index = grid.get(x, y, z);
         if (index === 0) continue;
         const material = palette.materials[index];
-        const ground = isGroundVoxel(layout, x, y, z);
+        const ground = allPlot || isGroundVoxel(layout, x, y, z);
         const amount = ground ? 0.05 : 0.12;
         const jitter = 1 + (hash3(x, y, z, 77) - 0.5) * amount;
         const r = Math.min(255, Math.round(material.r * jitter));
@@ -128,7 +144,9 @@ export function buildMesh(model: VoxelModel): Mesh {
           const v = (axis + 2) % 3;
           const p = [x, y, z];
           const normal: [number, number, number] = [dirs[f][0], dirs[f][1], dirs[f][2]];
-          const shadow = Math.round(shadowAt(grid, x + 0.5 + normal[0] * 0.5, y + 0.5 + normal[1] * 0.5, z + 0.5 + normal[2] * 0.5, normal) * 255);
+          const shadow = bakeShadows
+            ? Math.round(shadowAt(grid, x + 0.5 + normal[0] * 0.5, y + 0.5 + normal[1] * 0.5, z + 0.5 + normal[2] * 0.5, normal) * 255)
+            : 0;
           const front = [nx, ny, nz];
 
           for (let corner = 0; corner < 4; corner++) {
@@ -189,6 +207,7 @@ export function buildMesh(model: VoxelModel): Mesh {
     vertexCount: faceCount * 4,
     indices,
     faceCount,
-    bounds: { size: width, height: maxY, focusY: layout.base + objectSpan * 0.4, moduleVoxels: layout.M },
+    bounds: { size: width, height: maxY, focusY: allPlot ? layout.base + (maxY - layout.base) * 0.5 : layout.base + objectSpan * 0.4, moduleVoxels: layout.M },
+    soften: options.soften ?? 0,
   };
 }

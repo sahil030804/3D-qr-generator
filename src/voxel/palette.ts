@@ -46,6 +46,12 @@ export class Palette {
     return family;
   }
 
+  /** Add one stand-alone color (no tones, never recolored). Used for photo models. */
+  addColor(r: number, g: number, b: number): number {
+    this.materials.push({ r, g, b, family: -1, tone: 'mid', emissive: false });
+    return this.materials.length - 1;
+  }
+
   /** Family id by name. */
   id(name: string): number {
     const family = this.names.get(name);

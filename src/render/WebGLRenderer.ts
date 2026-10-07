@@ -19,6 +19,7 @@ uniform vec3 u_gnd;
 uniform vec3 u_sunCol;
 uniform float u_exposure;
 uniform float u_glow;
+uniform float u_soften;
 out vec3 v_albedo;
 out vec3 v_light;
 const vec3 NORMALS[6] = vec3[6](
@@ -30,6 +31,7 @@ void main() {
   vec3 n = NORMALS[ni];
   int flags = int(a_aux.w * 255.0 + 0.5);
   bool ground = flags >= 128;
+  if (ground && ni != 2) n = normalize(mix(n, vec3(0.0, 1.0, 0.0), u_soften));
   bool emissive = (flags & 64) != 0;
   float span = a_aux.z;
 
@@ -218,7 +220,7 @@ export class WebGLRenderer implements ViewRenderer {
       mesh, shadow, vao, vertexBuffer, indexBuffer, shadowVao, shadowBuffer,
       uniforms: locations(gl, mesh, [
         'u_viewProj', 'u_build', 'u_resolve', 'u_sun', 'u_sky', 'u_gnd',
-        'u_sunCol', 'u_exposure', 'u_glow', 'u_flat',
+        'u_sunCol', 'u_exposure', 'u_glow', 'u_flat', 'u_soften',
       ]),
       shadowUniforms: locations(gl, shadow, ['u_viewProj', 'u_center', 'u_extent', 'u_strength']),
     };
@@ -299,6 +301,7 @@ export class WebGLRenderer implements ViewRenderer {
     gl.uniform1f(u.u_exposure, light.exposure);
     gl.uniform1f(u.u_glow, light.glow);
     gl.uniform1f(u.u_flat, view.flat);
+    gl.uniform1f(u.u_soften, mesh.soften);
     gl.bindVertexArray(r.vao);
     gl.drawElements(gl.TRIANGLES, mesh.faceCount * 6, gl.UNSIGNED_INT, 0);
     gl.bindVertexArray(null);

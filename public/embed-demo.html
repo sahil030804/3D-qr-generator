@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voxel QR — embed demo</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; background: #f6f3ee; color: #1b1f2a; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { margin: 0 0 4px; font-size: 1.6rem; }
+  p.lead { margin: 0 0 28px; color: #5a6072; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+  .card { border-radius: 18px; padding: 16px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 12px 28px rgba(0,0,0,.08); }
+  .card.dark { background: #10162a; color: #e9ecf6; }
+  .card h2 { margin: 0 0 4px; font-size: 1rem; }
+  .card p { margin: 0 0 12px; font-size: .85rem; opacity: .75; }
+  iframe { display: block; width: 100%; aspect-ratio: 1 / 1; border: 0; border-radius: 12px; }
+  .bar { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  button { font: inherit; padding: 8px 14px; border-radius: 10px; border: 1px solid #c7ccda; background: #f2f4fa; cursor: pointer; }
+  pre { margin: 24px 0 0; padding: 14px; border-radius: 12px; background: #11151f; color: #cfd6ea; font-size: .78rem; overflow: auto; max-height: 180px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Voxel QR embeds</h1>
+  <p class="lead">Each box is a plain &lt;iframe&gt;. Drag to rotate, tap the model (or the button) to reveal the flat QR.</p>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Default</h2>
+      <p>Sky backdrop, daytime, cherry tree.</p>
+      <iframe id="a" title="Interactive 3D QR code" loading="lazy" allow="fullscreen"
+        src="./?embed=1&text=https%3A%2F%2Fexample.com%2Fcherry&o=cherry-tree&v=blossom&t=day"></iframe>
+      <div class="bar">
+        <button data-target="a" data-command="reveal">Reveal</button>
+        <button data-target="a" data-command="hide">Back to model</button>
+      </div>
+    </section>
+
+    <section class="card dark">
+      <h2>Transparent on a dark page</h2>
+      <p>bg=transparent, night lighting, no sway.</p>
+      <iframe id="b" title="Interactive 3D QR code" loading="lazy" allow="fullscreen"
+        src="./?embed=1&text=https%3A%2F%2Fexample.com%2Fcar&o=car&v=blue&t=night&bg=transparent&rotate=0"></iframe>
+      <div class="bar">
+        <button data-target="b" data-command="toggle">Toggle</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Starts on the flat QR, no controls</h2>
+      <p>view=scan, controls=0, hint=0.</p>
+      <iframe id="c" title="Interactive 3D QR code" loading="lazy" allow="fullscreen"
+        src="./?embed=1&text=https%3A%2F%2Fexample.com%2Fpine&o=pine-tree&t=day&view=scan&controls=0&hint=0"></iframe>
+      <div class="bar">
+        <button data-target="c" data-command="hide">Show the model</button>
+      </div>
+    </section>
+  </div>
+
+  <pre id="log">Events from the embeds will appear here…</pre>
+</main>
+<script>
+  const log = document.getElementById('log');
+  const lines = [];
+  window.addEventListener('message', (event) => {
+    const d = event.data;
+    if (!d || d.source !== 'voxel-qr') return;
+    const name = [...document.querySelectorAll('iframe')].find((f) => f.contentWindow === event.source)?.id ?? '?';
+    lines.unshift(`${new Date().toLocaleTimeString()}  [${name}] ${d.type}  mode=${d.mode}  busy=${d.busy}`);
+    log.textContent = lines.slice(0, 12).join('\n');
+  });
+  document.querySelectorAll('button[data-command]').forEach((button) => {
+    button.addEventListener('click', () => {
+      document.getElementById(button.dataset.target).contentWindow.postMessage({ source: 'voxel-qr-host', command: button.dataset.command }, '*');
+    });
+  });
+</script>
+</body>
+</html>

@@ -78,9 +78,14 @@ function prepare(mesh: Mesh): FaceData {
   return data;
 }
 
-function shade(data: FaceData, light: Lighting): void {
+function shade(data: FaceData, light: Lighting, soften: number): void {
   for (let f = 0; f < data.count; f++) {
-    const normal = NORMALS[data.normal[f]];
+    let normal = NORMALS[data.normal[f]];
+    if (soften > 0 && data.ground[f] && data.normal[f] !== 2) {
+      const m = [normal[0] * (1 - soften), normal[1] * (1 - soften) + soften, normal[2] * (1 - soften)];
+      const len = Math.hypot(m[0], m[1], m[2]) || 1;
+      normal = [m[0] / len, m[1] / len, m[2] / len];
+    }
     const sky = normal[1] * 0.5 + 0.5;
     const lambert = Math.max(0, normal[0] * SUN_DIR[0] + normal[1] * SUN_DIR[1] + normal[2] * SUN_DIR[2]);
     const ao = data.ao[f];
@@ -120,13 +125,13 @@ export class CanvasRenderer implements ViewRenderer {
   setMesh(mesh: Mesh): void {
     this.mesh = mesh;
     this.faces = prepare(mesh);
-    shade(this.faces, this.lighting);
+    shade(this.faces, this.lighting, mesh.soften);
     this.styles = new Map();
   }
 
   setLighting(lighting: Lighting): void {
     this.lighting = lighting;
-    if (this.faces) shade(this.faces, lighting);
+    if (this.faces && this.mesh) shade(this.faces, lighting, this.mesh.soften);
     this.styles = new Map();
   }
 

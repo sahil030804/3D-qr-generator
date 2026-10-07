@@ -42,6 +42,8 @@ export class Viewer {
   private canvas: HTMLCanvasElement;
   private renderer!: ViewRenderer;
   private mesh: Mesh | null = null;
+  private idleElevation = IDLE_ELEVATION;
+  private autoRotate = true;
   private pose: Pose = { azimuth: Math.PI / 4, elevation: START_ELEVATION };
   private from: Pose = { ...this.pose };
   private liftP = 0;
@@ -128,6 +130,22 @@ export class Viewer {
 
   toggle(): void {
     this.setMode(this.mode === 'object' ? 'scan' : 'object');
+  }
+
+  /** Turn the gentle idle sway on or off (embeds can ask for a still model). */
+  setAutoRotate(on: boolean): void {
+    this.autoRotate = on;
+    this.requestFrame();
+  }
+
+  /** Preferred resting camera angle, e.g. higher for a relief that lies flat on the plot. */
+  setRestingView(elevation: number, azimuth?: number): void {
+    this.idleElevation = elevation;
+    if (this.liftP === 0 && this.liftTarget === 0) {
+      this.pose.elevation = elevation;
+      if (azimuth !== undefined) this.pose.azimuth = azimuth;
+    }
+    this.requestFrame();
   }
 
   rotateBy(radians: number): void {
@@ -368,9 +386,9 @@ export class Viewer {
         animating = true;
       }
       const idle = this.clock - this.lastInteraction > 1.2;
-      if (idle && !this.reducedMotion) {
+      if (idle && !this.reducedMotion && this.autoRotate) {
         this.swayAmount += (1 - this.swayAmount) * (1 - Math.exp(-dt * 1.2));
-        this.pose.elevation += (IDLE_ELEVATION - this.pose.elevation) * (1 - Math.exp(-dt * 1.4));
+        this.pose.elevation += (this.idleElevation - this.pose.elevation) * (1 - Math.exp(-dt * 1.4));
         animating = true;
       }
     } else if (this.dragging) {

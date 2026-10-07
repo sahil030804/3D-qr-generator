@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "jsqr": "^1.4.0",
-    "qrcode-generator": "^1.4.4"
+    "onnxruntime-web": "^1.30.0",
+    "qrcode-generator": "^1.4.4",
+    "zxing-wasm": "^3.1.5"
   },
   "devDependencies": {
     "@types/qrcode-generator": "^1.0.6",

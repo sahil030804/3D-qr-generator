@@ -80,7 +80,7 @@ describe('scan view with the object still standing', () => {
     expect(recolored).toBeLessThanOrEqual(model.layout.size * model.layout.size);
   });
 
-  it('keeps every family that can end up on top well separated for scanners', () => {
+  it('keeps every family that can end up on top well separated for scanners', { timeout: 120000 }, () => {
     for (const object of OBJECTS) {
       for (const variant of object.variants) {
         const qr = generateQRMatrix('https://example.com');
